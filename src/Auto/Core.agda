@@ -8,11 +8,12 @@ open import Data.Product as Prod       using (∃; _×_; _,_; proj₁; proj₂)
 open import Data.Maybe   as Maybe      using (Maybe; just; nothing; maybe)
 open import Data.Sum     as Sum        using (_⊎_; inj₁; inj₂)
 open import Data.Integer as Int        using (ℤ; -[1+_]; +_) renaming (_≟_ to _≟-Int_)
+open import Data.Unit    as Unit       using (⊤)
 open import Relation.Nullary           using (Dec; yes; no)
 open import Relation.Nullary.Decidable using (map′)
 open import Relation.Binary            using (module DecTotalOrder)
 open import Relation.Binary.PropositionalEquality using (_≡_; refl; cong; sym)
-open import Reflection renaming (Term to AgTerm; _≟_ to _≟-AgTerm_)
+open import Reflection renaming (Term to AgTerm; _≟_ to _≟-AgTerm_; bindTC to _>>=_; returnTC to return)
 
 module Auto.Core where
 
@@ -33,10 +34,11 @@ module Auto.Core where
 
   -- define our own instance of the error functor based on the either
   -- monad, and use it to propagate one of several error messages
-  private
-    Error : ∀ {a} (A : Set a) → Set a
-    Error A = Message ⊎ A
+  Error : ∀ {a} (A : Set a) → Set a
+  Error A = Message ⊎ A
 
+
+  private
     _⟨$⟩_ : ∀ {a b} {A : Set a} {B : Set b} (f : A → B) → Error A → Error B
     f ⟨$⟩ inj₁ x = inj₁ x
     f ⟨$⟩ inj₂ y = inj₂ (f y)
@@ -151,18 +153,19 @@ module Auto.Core where
     convert cv d (var i args)  = inj₁ unsupportedSyntax
     convert cv d (con c args)  = fromDefOrCon c ⟨$⟩ convertChildren cv d args
     convert cv d (def f args)  = fromDefOrCon f ⟨$⟩ convertChildren cv d args
-    convert cv d (pi (arg (arg-info visible _) (el _ t₁)) (el _ t₂))
+    convert cv d (pi (arg (arg-info visible r) t₁) (abs _ t₂))
       with convert cv d t₁ | convert cv (suc d) t₂
     ... | inj₁ msg | _        = inj₁ msg
     ... | _        | inj₁ msg = inj₁ msg
     ... | inj₂ (n₁ , p₁) | inj₂ (n₂ , p₂)
       with match p₁ p₂
     ... | (p₁′ , p₂′) = inj₂ (n₁ ⊔ n₂ , con impl (p₁′ ∷ p₂′ ∷ []))
-    convert cv d (pi (arg _ _) (el _ t₂)) = convert cv (suc d) t₂
+    convert cv d (pi (arg _ _) (abs _ t₂)) = convert cv (suc d) t₂
     convert cv d (lam _ _)     = inj₁ unsupportedSyntax
     convert cv d (pat-lam _ _) = inj₁ unsupportedSyntax
     convert cv d (sort _)      = inj₁ unsupportedSyntax
     convert cv d unknown       = inj₁ unsupportedSyntax
+    convert cv d (meta _ _)    = inj₁ unsupportedSyntax
 
     convertChildren :
       ConvertVar → ℕ → List (Arg AgTerm) → Error (∃[ n ] List (PsTerm n))
@@ -205,39 +208,38 @@ module Auto.Core where
       toPremises i (t ∷ ts) = (n , rule (var i) t []) ∷ toPremises (pred i) ts
 
 
-  -- convert an Agda name to an rule-term.
-  name2term : Name → Error (∃ PsTerm)
-  name2term = agda2term ∘ unel ∘ type
-    where
-      unel : Type → AgTerm
-      unel (el _ t) = t
+  -- convert an Agda name to a rule-term.
+  name2term : Name → Type → Error (∃ Rule)
+  name2term nm ty with agda2term ty
+  ... | inj₁ msg            = inj₁ msg
+  ... | inj₂ (n , t)        with split t
+  ... | (k , ts)            with initLast ts
+  ... | (prems , concl , _) = inj₂ (n , rule (name nm) concl (toList prems))
 
 
   -- convert an Agda name to a rule.
-  name2rule : Name → Error (∃ Rule)
-  name2rule nm with name2term nm
-  ... | inj₁ msg             = inj₁ msg
-  ... | inj₂ (n , t)         with split t
-  ... | (k , ts)             with initLast ts
-  ... | (prems , concl , _)  = inj₂ (n , rule (name nm) concl (toList prems))
+  name2rule : Name → TC (Error (∃ Rule))
+  name2rule nm = getType nm >>= (return ∘ name2term nm)
 
 
   -- function which reifies untyped proof terms (from the
   -- `ProofSearch` module) to untyped Agda terms.
   mutual
-    reify : Proof → AgTerm
-    reify (con (var i) ps) = var i []
-    reify (con (name n) ps) with definition n
-    ... | function x    = def n (reifyChildren ps)
-    ... | constructor′  = con n (reifyChildren ps)
-    ... | data-type x   = unknown
-    ... | record′ x     = unknown
-    ... | axiom         = unknown
-    ... | primitive′    = unknown
+    reify : Proof → TC AgTerm
+    reify (con (var i) ps) = return (var i [])
+    reify (con (name n) ps) = getDefinition n >>= reifyDef
+      where
+        reifyDef : Definition → TC AgTerm
+        reifyDef (function cs)       = reifyChildren ps >>= (return ∘ def n)
+        reifyDef (data-type pars cs) = reifyChildren ps >>= (return ∘ con n)
+        reifyDef (record′ c)         = return unknown
+        reifyDef (constructor′ d)    = return unknown
+        reifyDef axiom               = return unknown
+        reifyDef primitive′          = return unknown
 
-    reifyChildren : List Proof → List (Arg AgTerm)
-    reifyChildren [] = []
-    reifyChildren (p ∷ ps) = toArg (reify p) ∷ reifyChildren ps
+    reifyChildren : List Proof → TC (List (Arg AgTerm))
+    reifyChildren [] = return []
+    reifyChildren (p ∷ ps) = reify p >>= (λ r → reifyChildren ps >>= (λ cs → return (toArg r ∷ cs)))
       where
         toArg : AgTerm → Arg AgTerm
         toArg = arg (arg-info visible relevant)

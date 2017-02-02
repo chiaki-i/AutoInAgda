@@ -33,21 +33,21 @@ module Auto.Example.Even where
   simple e =  even+ e (isEven+2 isEven0)
 
   rules : HintDB
-  rules = [] << (q isEven0)
-             << (q isEven+2)
-             << (q even+)
+  rules = [] << q isEven0
+             << q isEven+2
+             << q even+
 
   test₁ : Even 4
-  test₁ = (auto 5 rules)
+  test₁ = auto 5 rules
 
-  -- test₂ : ∀ {n} → Even n → Even (n + 2)
-  -- test₂ = (auto 5 rules)
+  test₂ : ∀ {n} → Even n → Even (n + 2)
+  test₂ = auto 5 rules
 
-  -- test₃ : ∀ {n} → Even n → Even (4 + n)
-  -- test₃ = (auto 5 rules)
+  test₃ : ∀ {n} → Even n → Even (4 + n)
+  test₃ = auto 5 rules
 
-  -- test₄ : ∀ {n} → Even n → Even (n + 2)
-  -- test₄ = (auto 5 rules)
+  test₄ : ∀ {n} → Even n → Even (n + 2)
+  test₄ = auto 5 rules
 
   -- attempting to prove an impossible goal (e.g. evenness of n + 3
   -- for all n) will result in searchSpaceExhausted

@@ -153,7 +153,7 @@ module Auto.Core where
     convert cv d (var i args)  = inj₁ unsupportedSyntax
     convert cv d (con c args)  = fromDefOrCon c ⟨$⟩ convertChildren cv d args
     convert cv d (def f args)  = fromDefOrCon f ⟨$⟩ convertChildren cv d args
-    convert cv d (pi (arg (arg-info visible r) t₁) (abs _ t₂))
+    convert cv d (pi (arg (arg-info visible _) t₁) (abs _ t₂))
       with convert cv d t₁ | convert cv (suc d) t₂
     ... | inj₁ msg | _        = inj₁ msg
     ... | _        | inj₁ msg = inj₁ msg
@@ -231,9 +231,9 @@ module Auto.Core where
       where
         reifyDef : Definition → TC AgTerm
         reifyDef (function cs)       = reifyChildren ps >>= (return ∘ def n)
-        reifyDef (data-type pars cs) = reifyChildren ps >>= (return ∘ con n)
+        reifyDef (constructor′ d)    = reifyChildren ps >>= (return ∘ con n) 
+        reifyDef (data-type pars cs) = return unknown
         reifyDef (record′ c)         = return unknown
-        reifyDef (constructor′ d)    = return unknown
         reifyDef axiom               = return unknown
         reifyDef primitive′          = return unknown
 

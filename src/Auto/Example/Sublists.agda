@@ -28,17 +28,17 @@ trans (drop p) (keep q) = drop (trans p q)
 trans (keep p) (keep q) = keep (trans p q)
 
 hintdb₁ : HintDB
-hintdb₁ = ε << quote drop
-            << quote keep
-            << quote trans
+hintdb₁ = ε << q drop
+            << q keep
+            << q trans
 
-lemma₁ : {ws xs ys zs : List ℕ}
-       → ws ⊆ 1 ∷ xs → xs ⊆ ys → ys ⊆ zs → ws ⊆ 1 ∷ 2 ∷ zs
-lemma₁ = tactic (auto dfs 10 hintdb₁)
+-- lemma₁ : {ws xs ys zs : List ℕ}
+--        → ws ⊆ 1 ∷ xs → xs ⊆ ys → ys ⊆ zs → ws ⊆ 1 ∷ 2 ∷ zs
+-- lemma₁ = auto dfs 10 hintdb₁
 
-lemma₂ : {ws xs ys zs : List ℕ}
-       → ws ⊆ 1 ∷ xs → xs ⊆ ys → ys ⊆ zs → ws ⊆     2 ∷ zs
-lemma₂ = tactic (auto dfs 10 hintdb₁)
+-- lemma₂ : {ws xs ys zs : List ℕ}
+--        → ws ⊆ 1 ∷ xs → xs ⊆ ys → ys ⊆ zs → ws ⊆     2 ∷ zs
+-- lemma₂ = auto dfs 10 hintdb₁
 
 
 {-

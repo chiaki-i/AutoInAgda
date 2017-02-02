@@ -1,4 +1,4 @@
-open import Auto.Core                  using (Rule; RuleName; _≟-RuleName_; name2rule; IsHintDB)
+open import Auto.Core                  using (Rule; RuleName; _≟-RuleName_; name2rule; IsHintDB; Error)
 open import Level                      using (zero)
 open import Function                   using (id; _∘_)
 open import Category.Functor           using (module RawFunctor)
@@ -88,9 +88,7 @@ open import Auto.Extensible countingHintDB public
 
 infixl 5 _<<[_]_
 
-_<<[_]_ : HintDB → ℕ → Name → HintDB
-db <<[ 0 ] _ = db
-db <<[ x ] n with (name2rule n)
-db <<[ x ] n | inj₁ msg     = db
-db <<[ x ] n | inj₂ (k , r) = db ∙ [ k , mkHint r (inj₁ x) ]
-
+_<<[_]_ : HintDB → ℕ → (Error (∃ Rule)) → HintDB
+db <<[ 0 ] n = db
+db <<[ x ] inj₁ msg     = db
+db <<[ x ] inj₂ (k , r) = db ∙ [ k , mkHint r (inj₁ x) ]

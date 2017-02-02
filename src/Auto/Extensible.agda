@@ -5,7 +5,7 @@ open import Data.Nat     using (ℕ; zero; suc; _+_)
 open import Data.Product using (∃; _,_; Σ)
 open import Data.Sum     using (inj₁; inj₂)
 open import Data.Unit    using (⊤)
-open import Reflection   using (Type; Term; Name; lam; abs; visible; TC; quoteTC) renaming (bindTC to _>>=_; returnTC to return; typeError to error)
+open import Reflection   using (Type; Term; Name; lam; abs; visible; TC; quoteTC) renaming (bindTC to _>>=_; returnTC to return)
 
 module Auto.Extensible (instHintDB : IsHintDB) where
 
@@ -36,13 +36,15 @@ auto search depth db type
 infixl 5 _<<_
 
 
-_<<_ : HintDB → (∃ Rule) → HintDB
-db << (n , r) = returnHintDB r ∙ db
+_<<_ : HintDB → Error (∃ Rule) → HintDB
+db << inj₁ _ = db
+db << inj₂ (_ , r) = (returnHintDB r) ∙ db
+
+
+runTC : ∀ {a} {A : Set a} → TC A → Term → TC ⊤
+runTC tc h = tc >>= (λ r → quoteTC r >>= (λ t → Reflection.unify h t))
 
 macro
   q : Name → Term → TC ⊤
-  q nm hole = name2rule nm >>= (λ r → go r >>= (λ rr → quoteTC rr >>= (λ x → Reflection.unify x hole)))
-    where
-      go : Error (∃ Rule) → TC (∃ Rule)
-      go (inj₁ msg) = error []
-      go (inj₂ r)   = return r
+  q nm = runTC (name2rule nm)
+

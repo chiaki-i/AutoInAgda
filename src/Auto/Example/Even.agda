@@ -33,12 +33,12 @@ module Auto.Example.Even where
   simple e =  even+ e (isEven+2 isEven0)
 
   rules : HintDB
-  rules = [] << q isEven0
-             << q isEven+2
-             << q even+
+  rules = ε << isEven0
+            << isEven+2
+            << even+
 
   test₁ : Even 4
-  test₁ = auto 5 rules
+  test₁ = auto 3 rules
 
   test₂ : ∀ {n} → Even n → Even (n + 2)
   test₂ = auto 5 rules

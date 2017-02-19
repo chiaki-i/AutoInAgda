@@ -1,7 +1,8 @@
 open import Level                      using (Level)
 open import Function                   using (_∘_; id; flip)
 open import Data.Fin     as Fin        using (fromℕ)
-open import Data.Nat     as Nat        using (ℕ; suc; zero; pred; _+_; _⊔_; decTotalOrder)
+open import Data.Nat     as Nat        using (ℕ; suc; zero; pred; _+_; _⊔_)
+open import Data.Nat.Properties        using (≤-decTotalOrder)
 open import Data.List    as List       using (List; []; _∷_; [_]; concatMap; _++_; length; map)
 open import Data.Vec     as Vec        using (Vec; []; _∷_; _∷ʳ_; reverse; initLast; toList)
 open import Data.Product as Prod       using (∃; _×_; _,_; proj₁; proj₂)
@@ -13,11 +14,11 @@ open import Relation.Nullary           using (Dec; yes; no)
 open import Relation.Nullary.Decidable using (map′)
 open import Relation.Binary            using (module DecTotalOrder)
 open import Relation.Binary.PropositionalEquality using (_≡_; refl; cong; sym)
-open import Reflection renaming (Term to AgTerm; _≟_ to _≟-AgTerm_; bindTC to _>>=_; returnTC to return)
+open import Reflection renaming (Term to AgTerm; Type to AgType;  _≟_ to _≟-AgTerm_; bindTC to _>>=_; returnTC to return)
 
 module Auto.Core where
 
-  open DecTotalOrder Nat.decTotalOrder using (total)
+  open DecTotalOrder ≤-decTotalOrder using (total)
 
   private
     ∃-syntax : ∀ {a b} {A : Set a} → (A → Set b) → Set (b Level.⊔ a)
@@ -209,17 +210,12 @@ module Auto.Core where
 
 
   -- convert an Agda name to a rule-term.
-  name2term : Name → Type → Error (∃ Rule)
+  name2term : Name → AgType → Error (∃ Rule)
   name2term nm ty with agda2term ty
   ... | inj₁ msg            = inj₁ msg
   ... | inj₂ (n , t)        with split t
   ... | (k , ts)            with initLast ts
   ... | (prems , concl , _) = inj₂ (n , rule (name nm) concl (toList prems))
-
-
-  -- convert an Agda name to a rule.
-  name2rule : Name → TC (Error (∃ Rule))
-  name2rule nm = getType nm >>= (return ∘ name2term nm)
 
 
   -- function which reifies untyped proof terms (from the

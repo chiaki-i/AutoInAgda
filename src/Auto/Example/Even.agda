@@ -40,8 +40,8 @@ module Auto.Example.Even where
   test₁ : Even 4
   test₁ = auto 3 rules
 
-  test₂ : ∀ {n} → Even n → Even (n + 2)
-  test₂ = auto 5 rules
+  test2 : ∀ {n} → Even n → Even (n + 2)
+  test2 e = auto 5 rules
 
   test₃ : ∀ {n} → Even n → Even (4 + n)
   test₃ = auto 5 rules

@@ -1,11 +1,11 @@
 open import Auto.Core
 open import Function     using (_∘_; const)
-open import Data.List    using (_∷_; []; length)
+open import Data.List    using (_∷_; []; List; length)
 open import Data.Nat     using (ℕ; zero; suc; _+_)
 open import Data.Product using (∃; _,_; Σ)
 open import Data.Sum     using (inj₁; inj₂)
 open import Data.Unit    using (⊤)
-open import Reflection   using (Type; Term; Name; lam; abs; visible; TC; quoteTC; getType; normalise) renaming (bindTC to _>>=_; returnTC to return)
+open import Reflection   using (Type; Term; Arg; Name; lam; abs; visible; TC; quoteTC; getType; normalise) renaming (bindTC to _>>=_; returnTC to return)
 open import Reflection.Tactic using (runTC; Macro)
 
 open import Data.Maybe
@@ -18,12 +18,15 @@ open PsExtensible instHintDB public
 open Auto.Core               public using (dfs; bfs; Exception; throw; searchSpaceExhausted; unsupportedSyntax)
 
 
-auto : Strategy → ℕ → HintDB → Type → TC Term
-auto search depth db type
-  with agda2goal×premises type
-... | inj₁ msg = return (quoteError msg)
+auto : Strategy → ℕ → HintDB → Type → List (Arg Type) → TC Term
+auto search depth db type ctx
+  with context2premises ctx
+... | inj₁ msg₁ = return (quoteError msg₁)
+... | inj₂ ctxs
+  with agda2goal×premises (length ctxs) type
+... | inj₁ msg  = return (quoteError msg)
 ... | inj₂ ((n , g) , args)
-  with search (suc depth) (solve g (fromRules args ∙ db))
+  with search (suc depth) (solve g (fromRules ctxs ∙ (fromRules args ∙ db)))
 ... | []      = return (quoteError searchSpaceExhausted)
 ... | (p ∷ _) = reify p >>= (return ∘ intros)
   where

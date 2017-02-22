@@ -14,7 +14,7 @@ open import Relation.Nullary           using (Dec; yes; no)
 open import Relation.Nullary.Decidable using (map′)
 open import Relation.Binary            using (module DecTotalOrder)
 open import Relation.Binary.PropositionalEquality using (_≡_; refl; cong; sym)
-open import Reflection renaming (Term to AgTerm; Type to AgType;  _≟_ to _≟-AgTerm_; bindTC to _>>=_; returnTC to return)
+open import Reflection renaming (Term to AgTerm; Type to AgType; _≟_ to _≟-AgTerm_; bindTC to _>>=_; returnTC to return)
 
 module Auto.Core where
 
@@ -197,8 +197,10 @@ module Auto.Core where
   -- representing the premises of the rule---this means that for a
   -- term of the type `A → B` this function will generate a goal of
   -- type `B` and a premise of type `A`.
-  agda2goal×premises : AgTerm → Error (∃ PsTerm × Rules)
-  agda2goal×premises t with convert convertVar4Goal 0 t
+  -- the ℕ represents the initial `depth` to convert variables as there
+  -- might be variables given in the context.
+  agda2goal×premises : ℕ → AgType →  Error (∃ PsTerm × Rules)
+  agda2goal×premises d t with convert convertVar4Goal d t
   ... | inj₁ msg            = inj₁ msg
   ... | inj₂ (n , p)        with split p
   ... | (k , ts)            with initLast ts
@@ -208,6 +210,16 @@ module Auto.Core where
       toPremises i [] = []
       toPremises i (t ∷ ts) = (n , rule (var i) t []) ∷ toPremises (pred i) ts
 
+  -- convert an Agda context to a `HintDB`.
+  context2premises : List (Arg AgType) → Error Rules
+  context2premises ctx
+    with convertChildren convertVar4Goal 0 ctx
+  ... | inj₁ msg = inj₁ msg
+  ... | inj₂ (n , p) = inj₂ (toPremises n p)
+    where
+      toPremises : ℕ → List (PsTerm n) → Rules
+      toPremises i [] = []
+      toPremises i (t ∷ ts) = (n , rule (var i) t []) ∷ toPremises (pred i) ts
 
   -- convert an Agda name to a rule-term.
   name2term : Name → AgType → Error (∃ Rule)

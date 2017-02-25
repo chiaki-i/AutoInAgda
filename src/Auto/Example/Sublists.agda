@@ -1,9 +1,9 @@
 open import Function      using (flip; _∘_; _$_)
-open import Auto.Counting
+open import Auto
 open import Data.Nat      using (ℕ)
 open import Data.List     using (List; _∷_; [])
 open import Data.Product  using (∃; _,_; proj₂)
-open import Data.Maybe    
+open import Data.Maybe
 open import Data.Sum      using (inj₁; inj₂; isInj₂)
 
 module Auto.Example.Sublists where
@@ -28,17 +28,18 @@ trans (drop p) (keep q) = drop (trans p q)
 trans (keep p) (keep q) = keep (trans p q)
 
 hintdb₁ : HintDB
-hintdb₁ = ε << q drop
-            << q keep
-            << q trans
+hintdb₁ = ε << drop
+            << keep
+            << trans
 
--- lemma₁ : {ws xs ys zs : List ℕ}
---        → ws ⊆ 1 ∷ xs → xs ⊆ ys → ys ⊆ zs → ws ⊆ 1 ∷ 2 ∷ zs
--- lemma₁ = auto dfs 10 hintdb₁
+lemma₁ : {ws xs ys zs : List ℕ}
+       → ws ⊆ 1 ∷ xs → xs ⊆ ys → ys ⊆ zs → ws ⊆ 1 ∷ 2 ∷ zs
+lemma₁ = apply (auto 7 hintdb₁)
 
+-- searchSpaceExhausted
 -- lemma₂ : {ws xs ys zs : List ℕ}
 --        → ws ⊆ 1 ∷ xs → xs ⊆ ys → ys ⊆ zs → ws ⊆     2 ∷ zs
--- lemma₂ = auto dfs 10 hintdb₁
+-- lemma₂ = auto 9 hintdb₁
 
 
 {-

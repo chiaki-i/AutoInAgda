@@ -3,13 +3,14 @@ open import Algebra                               using (module CommutativeSemir
 open import Function                              using (id; const; _∘_; _$_)
 open import Coinduction                           using (∞; ♯_; ♭)
 open import Data.Fin        as Fin                using (Fin; suc; zero)
-open import Data.List       as List               using (List; _∷_; []; [_]; _++_; length; concat; foldr; concatMap)
+open import Data.List       as List               using (List; _∷_; []; [_]; _++_; length; concat; foldr; concatMap; zipWith; reverse; downFrom)
 open import Data.Maybe                            using (Maybe; just; nothing)
 open import Data.Nat                              using (ℕ; suc; zero; _≤_; z≤n; s≤s)
 open import Data.Nat.Properties                   using (commutativeSemiring; distributiveLattice; ≤-decTotalOrder)
 open import Data.Product                          using (∃; _×_; _,_)
 open import Data.Sum                              using (_⊎_; inj₁; inj₂)
 open import Data.Vec        as Vec                using (Vec; _∷_; []; fromList)
+open import Data.Bool                             using (Bool; true; false)
 open import Relation.Nullary                      using (Dec; yes; no)
 open import Relation.Binary                       using (module DecTotalOrder)
 open import Relation.Binary.PropositionalEquality using (_≡_; refl; sym; trans; cong; subst)
@@ -188,13 +189,14 @@ module ProofSearch
   Goal = Term
 
   -- search trees
-  data SearchTree (A : Set) : Set where
-    leaf : A → SearchTree A
-    node : List (∞ (SearchTree A)) → SearchTree A
+  data SearchTree (A : Set) (B : Set) : Set where
+    leaf : B → A → SearchTree A B
+    fail : B → SearchTree A B
+    node : B → List (∞ (SearchTree A B)) → SearchTree A B
 
   -- representation of a failed branch
-  fail : ∀ {A} → SearchTree A
-  fail = node []
+  -- fail : ∀ {A} → SearchTree A
+  -- fail = node []
 
   data Proof : Set where
      con : (name : RuleName) (args : List Proof) → Proof
@@ -212,6 +214,8 @@ module ProofSearch
       rest = Vec.drop (arity r) xs
 
 
+  DebugInfo = Maybe RuleName
+
   ----------------------------------------------------------------------------
   -- * define proof search function                                       * --
   ----------------------------------------------------------------------------
@@ -220,17 +224,17 @@ module ProofSearch
 
     open IsHintDB isHintDB
 
-    solve : ∀ {m} → Goal m → HintDB → SearchTree Proof
-    solve {m} g = solveAcc {m} (1 , g ∷ [] , Vec.head)
+    solve : ∀ {m} → Goal m → HintDB → SearchTree Proof DebugInfo
+    solve {m} g = solveAcc {m} nothing (1 , g ∷ [] , Vec.head)
       where
-        solveAcc : ∀ {m} → Proof′ m → HintDB → SearchTree Proof
-        solveAcc {m} (0     ,     [] , p) _  = leaf (p [])
-        solveAcc {m} (suc k , g ∷ gs , p) db = node (steps (getHints db))
+        solveAcc : ∀ {m} → Maybe RuleName → Proof′ m → HintDB → SearchTree Proof DebugInfo
+        solveAcc {m} nm (0     ,     [] , p) _  = leaf nm (p [])
+        solveAcc {m} nm (suc k , g ∷ gs , p) db = node nm (steps (getHints db))
           where
-            step : ∃[ δ ] (Hint δ) → ∞ (SearchTree Proof)
+            step : ∃[ δ ] (Hint δ) → ∞ (SearchTree Proof DebugInfo)
             step (δ , h) with unify (inject δ g) (raise m (conclusion (getRule h)))
-            ... | nothing        = ♯ node [] -- fail
-            ... | just (n , mgu) = ♯ solveAcc {n} prf (getTr h db)
+            ... | nothing        = ♯ fail (just (name (getRule h)))
+            ... | just (n , mgu) = ♯ solveAcc {n} (just (name (getRule h)))  prf (getTr h db)
               where
                 prf : Proof′ n
                 prf = arity (getRule h) + k , gs′ , (p ∘ con′ (getRule h))
@@ -240,7 +244,7 @@ module ProofSearch
 
 
             -- equivalent to `map step` due to termination checker
-            steps : List (∃ Hint) → List (∞ (SearchTree Proof))
+            steps : List (∃ Hint) → List (∞ (SearchTree Proof DebugInfo))
             steps []       = []
             steps (h ∷ hs) = step h ∷ steps hs
 
@@ -249,13 +253,24 @@ module ProofSearch
   ----------------------------------------------------------------------------
 
   Strategy : Set₁
-  Strategy = ∀ {A} (depth : ℕ) → SearchTree A → List A
+  Strategy = ∀ {A B} (depth : ℕ) → SearchTree A B → List A
 
-  dfs : Strategy
-  dfs  zero    _        = []
-  dfs (suc k) (leaf x)  = x ∷ []
-  dfs (suc k) (node xs) = concatMap (λ x → dfs k (♭ x)) xs
+  aux : ∀ {A B} → List (A × B) → List A × List B
+  aux [] = ([] , [])
+  aux ((a , b) ∷ xs) with aux xs
+  ...| as , bs = (a ∷ as) , b ∷ bs
 
+  dfs' : ∀ {A B} (depth : ℕ) → (ℕ × List ℕ) → SearchTree A B → (List A × List ((List ℕ × Bool × B × ℕ)))
+  dfs' zero (n , p) (fail l)   = ([]     , (suc n ∷ p , true , l , zero) ∷ [])
+  dfs' zero (n , p) (leaf l x) = (x ∷ [] , (suc n ∷ p , false , l , zero) ∷ [])
+  dfs' zero (n , p) (node l _) = ([]     , (suc n ∷ p , false , l , zero) ∷ [])
+  dfs' (suc k) (n , p) (fail l)     = ([] , (suc n ∷ p , true , l , suc k) ∷ [])
+  dfs' (suc k) (n , p) (leaf l x)   = (x ∷ [] , (suc n ∷ p , false , l , suc k) ∷ [])
+  dfs' (suc k) (n , p) (node l xs )  with aux (zipWith (λ x m → dfs' k (m , suc n ∷ p)(♭ x)) xs (reverse (downFrom (length xs))))
+  ... | a , b = (concat a , ((suc n ∷ p), false , l , suc k) ∷ concat b)
+
+  dfs : ∀ {A B} (depth : ℕ) → SearchTree A B → (List A × List (List ℕ × Bool × B × ℕ))
+  dfs d s = dfs' d (0 , []) s
 
   bfs : Strategy
   bfs depth t = concat (Vec.toList (bfsAcc depth t))
@@ -268,7 +283,8 @@ module ProofSearch
       empty {k = zero}  = []
       empty {k = suc k} = [] ∷ empty
 
-      bfsAcc : ∀ {A} (depth : ℕ) → SearchTree A → Vec (List A) depth
+      bfsAcc : ∀ {A B} (depth : ℕ) → SearchTree A B → Vec (List A) depth
       bfsAcc  zero   _         = []
-      bfsAcc (suc k) (leaf x)  = (x ∷ []) ∷ empty
-      bfsAcc (suc k) (node xs) = [] ∷ foldr merge empty (List.map (λ x → bfsAcc k (♭ x)) xs)
+      bfsAcc (suc k) (fail _  )  = [] ∷ empty
+      bfsAcc (suc k) (leaf _ x)  = (x ∷ []) ∷ empty
+      bfsAcc (suc k) (node _ xs) = [] ∷ foldr merge empty (List.map (λ x → bfsAcc k (♭ x)) xs)

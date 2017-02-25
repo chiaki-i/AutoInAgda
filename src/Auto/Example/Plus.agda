@@ -1,0 +1,32 @@
+
+open import Auto
+open import Data.Nat using (ℕ; suc; zero; _+_)
+open import Relation.Binary.PropositionalEquality as PropEq using (_≡_; refl; cong; sym)
+
+module Auto.Example.Plus where
+
+-- Addition on naturals viewed as a logical relation
+data Plus : ℕ → ℕ → ℕ → Set where
+  plusZ : ∀ {n}     → Plus 0 n n
+  plusS : ∀ {n m r} → Plus n m r → Plus (suc n) m (suc r)
+
+Plus-HintDB : HintDB
+Plus-HintDB = ε << plusS << plusZ
+
+-- a handy synonym
+_+ℕ_≡_ : ℕ → ℕ → ℕ → Set
+n +ℕ m ≡ r = Plus n m r
+
+c-Plus : ∀ n m r → n + m ≡ r → n +ℕ m ≡ r
+c-Plus zero m .m refl = plusZ
+c-Plus (suc n) m .(suc (n + m)) refl = plusS (c-Plus n m _ refl)
+
+s-Plus : ∀ n m r → n +ℕ m ≡ r → n + m ≡ r
+s-Plus .0 m .m plusZ = refl
+s-Plus .(suc _) m .(suc _) (plusS p) = cong suc (s-Plus _ _ _ p)
+
+plus-5-3=8 : 5 +ℕ 3 ≡ 8
+plus-5-3=8 = apply (auto 5 Plus-HintDB)
+
+plus-5-1=6 : 10 +ℕ 1 ≡ 11
+plus-5-1=6 = apply (auto 15 Plus-HintDB)

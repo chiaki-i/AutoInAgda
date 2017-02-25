@@ -38,16 +38,16 @@ module Auto.Example.Even where
             << even+
 
   test₁ : Even 4
-  test₁ = auto 3 rules
+  test₁ = apply (auto 4 rules)
 
   test2 : ∀ {n} → Even n → Even (n + 2)
-  test2 e = auto 5 rules
+  test2 e = apply (auto 4 rules)
 
   test₃ : ∀ {n} → Even n → Even (4 + n)
-  test₃ = auto 5 rules
+  test₃ p = apply (auto 4 rules)
 
   test₄ : ∀ {n} → Even n → Even (n + 2)
-  test₄ = auto 5 rules
+  test₄ e = apply (auto 4 rules)
 
   -- attempting to prove an impossible goal (e.g. evenness of n + 3
   -- for all n) will result in searchSpaceExhausted

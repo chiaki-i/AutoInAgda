@@ -10,6 +10,7 @@ open import Data.Maybe   as Maybe      using (Maybe; just; nothing; maybe)
 open import Data.Sum     as Sum        using (_⊎_; inj₁; inj₂)
 open import Data.Integer as Int        using (ℤ; -[1+_]; +_) renaming (_≟_ to _≟-Int_)
 open import Data.Unit    as Unit       using (⊤)
+open import Data.String                using (String)
 open import Relation.Nullary           using (Dec; yes; no)
 open import Relation.Nullary.Decidable using (map′)
 open import Relation.Binary            using (module DecTotalOrder)
@@ -24,25 +25,6 @@ module Auto.Core where
     ∃-syntax : ∀ {a b} {A : Set a} → (A → Set b) → Set (b Level.⊔ a)
     ∃-syntax = ∃
     syntax ∃-syntax (λ x → B) = ∃[ x ] B
-
-
-  -- define error messages that may occur when the `auto` function is
-  -- called.
-  data Message : Set where
-    searchSpaceExhausted : Message
-    unsupportedSyntax    : Message
-
-
-  -- define our own instance of the error functor based on the either
-  -- monad, and use it to propagate one of several error messages
-  Error : ∀ {a} (A : Set a) → Set a
-  Error A = Message ⊎ A
-
-
-  private
-    _⟨$⟩_ : ∀ {a b} {A : Set a} {B : Set b} (f : A → B) → Error A → Error B
-    f ⟨$⟩ inj₁ x = inj₁ x
-    f ⟨$⟩ inj₂ y = inj₂ (f y)
 
 
   -- define term names for the term language we'll be using for proof
@@ -96,6 +78,15 @@ module Auto.Core where
   open import ProofSearch RuleName TermName _≟-TermName_ Literal _≟-Lit_
     as PS public renaming (Term to PsTerm; module Extensible to PsExtensible)
 
+  -- define our own instance of the error functor based on the either
+  -- monad, and use it to propagate one of several error messages
+  Error : ∀ {a} (A : Set a) → Set a
+  Error A = Maybe A
+
+  private
+    _⟨$⟩_ : ∀ {a b} {A : Set a} {B : Set b} (f : A → B) → Error A → Error B
+    f ⟨$⟩ nothing = nothing
+    f ⟨$⟩ just y  = just (f y)
   -- next up, converting the terms returned by Agda's reflection
   -- mechanism to terms in our proof search's language!
 
@@ -148,35 +139,35 @@ module Auto.Core where
   -- rule-terms or goal-terms, respectively.
   mutual
     convert : ConvertVar → (depth : ℕ) → AgTerm → Error (∃ PsTerm)
-    convert cv d (lit (nat n)) = inj₂ (0 , convertℕ n)
-    convert cv d (lit l)       = inj₂ (0 , lit l)
-    convert cv d (var i [])    = inj₂ (cv d i)
-    convert cv d (var i args)  = inj₁ unsupportedSyntax
+    convert cv d (lit (nat n)) = just (0 , convertℕ n)
+    convert cv d (lit l)       = just (0 , lit l)
+    convert cv d (var i [])    = just (cv d i)
+    convert cv d (var i args)  = nothing
     convert cv d (con c args)  = fromDefOrCon c ⟨$⟩ convertChildren cv d args
     convert cv d (def f args)  = fromDefOrCon f ⟨$⟩ convertChildren cv d args
     convert cv d (pi (arg (arg-info visible _) t₁) (abs _ t₂))
       with convert cv d t₁ | convert cv (suc d) t₂
-    ... | inj₁ msg | _        = inj₁ msg
-    ... | _        | inj₁ msg = inj₁ msg
-    ... | inj₂ (n₁ , p₁) | inj₂ (n₂ , p₂)
+    ... | nothing | _        = nothing
+    ... | _        | nothing  = nothing
+    ... | just (n₁ , p₁) | just (n₂ , p₂)
       with match p₁ p₂
-    ... | (p₁′ , p₂′) = inj₂ (n₁ ⊔ n₂ , con impl (p₁′ ∷ p₂′ ∷ []))
+    ... | (p₁′ , p₂′) = just (n₁ ⊔ n₂ , con impl (p₁′ ∷ p₂′ ∷ []))
     convert cv d (pi (arg _ _) (abs _ t₂)) = convert cv (suc d) t₂
-    convert cv d (lam _ _)     = inj₁ unsupportedSyntax
-    convert cv d (pat-lam _ _) = inj₁ unsupportedSyntax
-    convert cv d (sort _)      = inj₁ unsupportedSyntax
-    convert cv d unknown       = inj₁ unsupportedSyntax
-    convert cv d (meta _ _)    = inj₁ unsupportedSyntax
+    convert cv d (lam _ _)     = nothing
+    convert cv d (pat-lam _ _) = nothing
+    convert cv d (sort _)      = nothing
+    convert cv d unknown       = nothing
+    convert cv d (meta _ _)    = nothing
 
     convertChildren :
       ConvertVar → ℕ → List (Arg AgTerm) → Error (∃[ n ] List (PsTerm n))
-    convertChildren cv d [] = inj₂ (0 , [])
+    convertChildren cv d [] = just (0 , [])
     convertChildren cv d (arg (arg-info visible _) t ∷ ts)
       with convert cv d t | convertChildren cv d ts
-    ... | inj₁ msg      | _              = inj₁ msg
-    ... | _             | inj₁ msg       = inj₁ msg
-    ... | inj₂ (m , p)  | inj₂ (n , ps) with match p ps
-    ... | (p′ , ps′)                      = inj₂ (m ⊔ n , p′ ∷ ps′)
+    ... | nothing      | _              = nothing
+    ... | _             | nothing       = nothing
+    ... | just (m , p)  | just (n , ps) with match p ps
+    ... | (p′ , ps′)                      = just (m ⊔ n , p′ ∷ ps′)
     convertChildren cv d (arg _ _ ∷ ts)   = convertChildren cv d ts
 
 
@@ -201,21 +192,23 @@ module Auto.Core where
   -- might be variables given in the context.
   agda2goal×premises : ℕ → AgType →  Error (∃ PsTerm × Rules)
   agda2goal×premises d t with convert convertVar4Goal d t
-  ... | inj₁ msg            = inj₁ msg
-  ... | inj₂ (n , p)        with split p
+  ... | nothing             = nothing
+  ... | just (n , p)        with split p
   ... | (k , ts)            with initLast ts
-  ... | (prems , goal , _)  = inj₂ ((n , goal) , toPremises (pred k) prems)
+  ... | (prems , goal , _)  = just ((n , goal) , toPremises (pred k) prems)
     where
       toPremises : ∀ {k} → ℕ → Vec (PsTerm n) k → Rules
       toPremises i [] = []
       toPremises i (t ∷ ts) = (n , rule (var i) t []) ∷ toPremises (pred i) ts
 
+  Ctx = List (Arg AgType)
+
   -- convert an Agda context to a `HintDB`.
-  context2premises : List (Arg AgType) → Error Rules
+  context2premises : Ctx → Error Rules
   context2premises ctx
     with convertChildren convertVar4Goal 0 ctx
-  ... | inj₁ msg = inj₁ msg
-  ... | inj₂ (n , p) = inj₂ (toPremises n p)
+  ... | nothing = nothing
+  ... | just (n , p) = just (toPremises n p)
     where
       toPremises : ℕ → List (PsTerm n) → Rules
       toPremises i [] = []
@@ -224,41 +217,44 @@ module Auto.Core where
   -- convert an Agda name to a rule-term.
   name2term : Name → AgType → Error (∃ Rule)
   name2term nm ty with agda2term ty
-  ... | inj₁ msg            = inj₁ msg
-  ... | inj₂ (n , t)        with split t
+  ... | nothing            = nothing
+  ... | just (n , t)        with split t
   ... | (k , ts)            with initLast ts
-  ... | (prems , concl , _) = inj₂ (n , rule (name nm) concl (toList prems))
+  ... | (prems , concl , _) = just (n , rule (name nm) concl (toList prems))
 
 
   -- function which reifies untyped proof terms (from the
   -- `ProofSearch` module) to untyped Agda terms.
   mutual
-    reify : Proof → TC AgTerm
-    reify (con (var i) ps) = return (var i [])
-    reify (con (name n) ps) = getDefinition n >>= reifyDef
-      where
-        reifyDef : Definition → TC AgTerm
-        reifyDef (function cs)       = reifyChildren ps >>= (return ∘ def n)
-        reifyDef (constructor′ d)    = reifyChildren ps >>= (return ∘ con n) 
-        reifyDef (data-type pars cs) = return unknown
-        reifyDef (record′ c)         = return unknown
-        reifyDef axiom               = return unknown
-        reifyDef primitive′          = return unknown
+    proof2AgTerm : Proof → TC AgTerm
+    proof2AgTerm (con (var i) ps)  = return (var i [])
+    proof2AgTerm (con (name n) ps) =
+      getDefinition n >>=
+        λ { (function cs)       → children2AgTerms ps >>= (return ∘ def n)
+          ; (constructor′ d)    → children2AgTerms ps >>= (return ∘ con n) 
+          ; (data-type pars cs) → return unknown
+          ; (record′ c)         → return unknown
+          ; axiom               → return unknown
+          ; primitive′          → return unknown }
 
-    reifyChildren : List Proof → TC (List (Arg AgTerm))
-    reifyChildren [] = return []
-    reifyChildren (p ∷ ps) = reify p >>= (λ r → reifyChildren ps >>= (λ cs → return (toArg r ∷ cs)))
+    children2AgTerms : List Proof → TC (List (Arg AgTerm))
+    children2AgTerms []       = return []
+    children2AgTerms (p ∷ ps) = proof2AgTerm p >>= (λ r → children2AgTerms ps >>= (λ cs → return (toArg r ∷ cs)))
       where
         toArg : AgTerm → Arg AgTerm
         toArg = arg (arg-info visible relevant)
 
 
-  -- data-type `Exception` which is used to unquote error messages to
-  -- the type-level so that `auto` can generate descriptive type-errors.
+  intros : ℕ → AgTerm → AgTerm
+  intros  zero   t = t
+  intros (suc k) t = lam visible (abs "_" ((intros k t)))
 
-  data Exception : Message → Set where
-    throw : (msg : Message) → Exception msg
+  reify : ℕ → Proof → TC AgTerm
+  reify n p = proof2AgTerm p >>= (return ∘ intros n)
 
-  quoteError : Message → AgTerm
-  quoteError (searchSpaceExhausted) = quoteTerm (throw searchSpaceExhausted)
-  quoteError (unsupportedSyntax)    = quoteTerm (throw unsupportedSyntax)
+
+  -- debugging facilities
+  Debug = String
+
+  debug2String : Debug → String
+  debug2String = λ x → x

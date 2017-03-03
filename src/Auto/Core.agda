@@ -147,7 +147,7 @@ module Auto.Core where
     convert cv d (def f args)  = fromDefOrCon f ⟨$⟩ convertChildren cv d args
     convert cv d (pi (arg (arg-info visible _) t₁) (abs _ t₂))
       with convert cv d t₁ | convert cv (suc d) t₂
-    ... | nothing | _        = nothing
+    ... | nothing | _         = nothing
     ... | _        | nothing  = nothing
     ... | just (n₁ , p₁) | just (n₂ , p₂)
       with match p₁ p₂
@@ -171,11 +171,6 @@ module Auto.Core where
     convertChildren cv d (arg _ _ ∷ ts)   = convertChildren cv d ts
 
 
-  -- convert an Agda term to a rule-term.
-  agda2term : AgTerm → Error (∃ PsTerm)
-  agda2term t = convert convertVar4Term 0 t
-
-
   -- split a term at every occurrence of the `impl` constructor---
   -- equivalent to splitting at every occurrence of the _→_ symbol in
   -- an Agda term.
@@ -188,10 +183,8 @@ module Auto.Core where
   -- representing the premises of the rule---this means that for a
   -- term of the type `A → B` this function will generate a goal of
   -- type `B` and a premise of type `A`.
-  -- the ℕ represents the initial `depth` to convert variables as there
-  -- might be variables given in the context.
-  agda2goal×premises : ℕ → AgType →  Error (∃ PsTerm × Rules)
-  agda2goal×premises d t with convert convertVar4Goal d t
+  agda2goal×premises : AgType →  Error (∃ PsTerm × Rules)
+  agda2goal×premises t with convert convertVar4Goal 0 t
   ... | nothing             = nothing
   ... | just (n , p)        with split p
   ... | (k , ts)            with initLast ts
@@ -201,22 +194,25 @@ module Auto.Core where
       toPremises i [] = []
       toPremises i (t ∷ ts) = (n , rule (var i) t []) ∷ toPremises (pred i) ts
 
-  Ctx = List (Arg AgType)
+  -- A context is a deBruijn indexed list of the types of the variables.
+  Ctx = List (AgType)
 
   -- convert an Agda context to a `HintDB`.
-  context2premises : Ctx → Error Rules
-  context2premises ctx
-    with convertChildren convertVar4Goal 0 ctx
-  ... | nothing = nothing
-  ... | just (n , p) = just (toPremises n p)
-    where
-      toPremises : ℕ → List (PsTerm n) → Rules
-      toPremises i [] = []
-      toPremises i (t ∷ ts) = (n , rule (var i) t []) ∷ toPremises (pred i) ts
+  context2premises : (index : ℕ) → Ctx → Error Rules
+  context2premises i []       = just []
+  context2premises i (t ∷ ts)
+    with convert convertVar4Goal 0 t
+  ... | nothing          = context2premises (suc i) ts
+  ... | just (n , p)     with split p
+  ... | (k , ts')        with initLast ts'
+  ... | (prems , goal , _) with context2premises (suc i) ts
+  ... | nothing            = just ((n , rule (var i) goal (toList prems)) ∷ [])
+  ... | just xs            = just ((n , rule (var i) goal (toList prems)) ∷ xs)
+
 
   -- convert an Agda name to a rule-term.
   name2term : Name → AgType → Error (∃ Rule)
-  name2term nm ty with agda2term ty
+  name2term nm ty with convert convertVar4Term 0 ty
   ... | nothing            = nothing
   ... | just (n , t)        with split t
   ... | (k , ts)            with initLast ts

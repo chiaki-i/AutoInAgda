@@ -39,12 +39,12 @@ showD (l , b , nm , d) with nm
 
 auto : ℕ → HintDB → Type → Ctx → Maybe (Debug × Maybe (TC Term))
 auto depth db type ctx
-  with context2premises ctx
-... | nothing = nothing
-... | just ctxs
-  with agda2goal×premises (length ctxs) type
+  with agda2goal×premises type
 ... | nothing = nothing
 ... | just ((n , g) , args)
+  with context2premises (length args) ctx
+... | nothing = nothing
+... | just ctxs
   with dfs (suc depth) (solve g (fromRules ctxs ∙ (fromRules args ∙ db))) 
 ... | ([] , d)    = just ((unlines ∘ map showD) d , nothing)
 ... | (p ∷ _ , d) = just ((unlines ∘ map showD) d , just (reify (length args) p)) 

@@ -2,6 +2,7 @@
 open import Auto
 open import Data.Nat using (ℕ; suc; zero; _+_)
 open import Relation.Binary.PropositionalEquality as PropEq using (_≡_; refl; cong; sym)
+open import Function using (_∋_)
 
 module Auto.Example.Plus where
 
@@ -11,7 +12,8 @@ data Plus : ℕ → ℕ → ℕ → Set where
   plusS : ∀ {n m r} → Plus n m r → Plus (suc n) m (suc r)
 
 Plus-HintDB : HintDB
-Plus-HintDB = ε << plusS << plusZ
+Plus-HintDB = ε << plusS
+                << plusZ
 
 -- a handy synonym
 _+ℕ_≡_ : ℕ → ℕ → ℕ → Set
@@ -25,8 +27,12 @@ s-Plus : ∀ n m r → n +ℕ m ≡ r → n + m ≡ r
 s-Plus .0 m .m plusZ = refl
 s-Plus .(suc _) m .(suc _) (plusS p) = cong suc (s-Plus _ _ _ p)
 
-plus-5-3=8 : 5 +ℕ 3 ≡ 8
-plus-5-3=8 = apply (auto 5 Plus-HintDB)
+plus-5+3=8 : 5 +ℕ 3 ≡ 8
+plus-5+3=8 = apply (auto 10 Plus-HintDB)
 
-plus-5-1=6 : 10 +ℕ 1 ≡ 11
-plus-5-1=6 = apply (auto 15 Plus-HintDB)
+plus-5+1=6 : 10 +ℕ 1 ≡ 11
+plus-5+1=6 = apply (auto 15 Plus-HintDB)
+
+plus-0+1=1 : 1 +ℕ 1 ≡ 2
+plus-0+1=1 with plusZ {1}
+... | pz = apply (auto 2 (ε << plusS))

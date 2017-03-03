@@ -1,10 +1,6 @@
 open import Auto
-open import Algebra
-open import Data.List using (_∷_; [];_++_;List)
 open import Data.Nat using (ℕ; suc; zero; _+_)
-open import Data.Product using (∃; _×_; ∃₂; proj₁; proj₂)
 open import Relation.Binary.PropositionalEquality as PropEq using (_≡_; refl; cong; sym)
-open import Reflection
 
 module Auto.Example.Even where
 
@@ -46,8 +42,8 @@ module Auto.Example.Even where
   test₃ : ∀ {n} → Even n → Even (4 + n)
   test₃ p = apply (auto 4 rules)
 
-  test₄ : ∀ {n} → Even n → Even (n + 2)
-  test₄ e = apply (auto 4 rules)
+  test₄ : ∀ {n} → Even n → Even (n + 16)
+  test₄ = apply (auto 20 rules)
 
   -- attempting to prove an impossible goal (e.g. evenness of n + 3
   -- for all n) will result in searchSpaceExhausted

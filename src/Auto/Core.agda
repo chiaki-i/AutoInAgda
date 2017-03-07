@@ -6,6 +6,7 @@ open import Data.List    as List       using (List; []; _∷_; [_]; concatMap; _
 open import Data.Vec     as Vec        using (Vec; []; _∷_; _∷ʳ_; reverse; initLast; toList)
 open import Data.Product as Prod       using (∃; _×_; _,_; proj₁; proj₂)
 open import Data.Maybe   as Maybe      using (Maybe; just; nothing; maybe)
+open import Data.Maybe.Extra           using (_<$>_)
 open import Data.Sum     as Sum        using (_⊎_; inj₁; inj₂)
 open import Data.Integer as Int        using (ℤ; -[1+_]; +_) renaming (_≟_ to _≟-Int_)
 open import Data.Unit    as Unit       using (⊤)
@@ -77,19 +78,6 @@ module Auto.Core where
   open import ProofSearch RuleName TermName _≟-TermName_ Literal _≟-Lit_
     as PS public renaming (Term to PsTerm; module Extensible to PsExtensible)
 
-  -- define our own instance of the error functor based on the either
-  -- monad, and use it to propagate one of several error messages
-  Error : ∀ {a} (A : Set a) → Set a
-  Error A = Maybe A
-
-  private
-    _⟨$⟩_ : ∀ {a b} {A : Set a} {B : Set b} (f : A → B) → Error A → Error B
-    f ⟨$⟩ nothing = nothing
-    f ⟨$⟩ just y  = just (f y)
-  -- next up, converting the terms returned by Agda's reflection
-  -- mechanism to terms in our proof search's language!
-
-
   -- dictionary for the treatment of variables in conversion from Agda
   -- terms to terms to be used in proof search.
   ConvertVar  : Set
@@ -137,13 +125,13 @@ module Auto.Core where
   -- passing in `ConvertVar4Term` or `ConvertVar4Goal` will result in
   -- rule-terms or goal-terms, respectively.
   mutual
-    convert : ConvertVar → (depth : ℕ) → AgTerm → Error (∃ PsTerm)
+    convert : ConvertVar → (depth : ℕ) → AgTerm → Maybe (∃ PsTerm)
     convert cv d (lit (nat n)) = just (0 , convertℕ n)
     convert cv d (lit l)       = just (0 , lit l)
     convert cv d (var i [])    = just (cv d i)
     convert cv d (var i args)  = nothing
-    convert cv d (con c args)  = fromDefOrCon c ⟨$⟩ convertChildren cv d args
-    convert cv d (def f args)  = fromDefOrCon f ⟨$⟩ convertChildren cv d args
+    convert cv d (con c args)  = fromDefOrCon c <$> convertChildren cv d args
+    convert cv d (def f args)  = fromDefOrCon f <$> convertChildren cv d args
     convert cv d (pi (arg (arg-info visible _) t₁) (abs _ t₂))
       with convert cv d t₁ | convert cv (suc d) t₂
     ... | nothing | _         = nothing
@@ -159,15 +147,15 @@ module Auto.Core where
     convert cv d (meta _ _)    = nothing
 
     convertChildren :
-      ConvertVar → ℕ → List (Arg AgTerm) → Error (∃[ n ] List (PsTerm n))
+      ConvertVar → ℕ → List (Arg AgTerm) → Maybe (∃[ n ] List (PsTerm n))
     convertChildren cv d [] = just (0 , [])
     convertChildren cv d (arg (arg-info visible _) t ∷ ts)
       with convert cv d t | convertChildren cv d ts
-    ... | nothing      | _              = nothing
+    ... | nothing       | _             = nothing
     ... | _             | nothing       = nothing
     ... | just (m , p)  | just (n , ps) with match p ps
-    ... | (p′ , ps′)                      = just (m ⊔ n , p′ ∷ ps′)
-    convertChildren cv d (arg _ _ ∷ ts)   = convertChildren cv d ts
+    ... | (p′ , ps′)                     = just (m ⊔ n , p′ ∷ ps′)
+    convertChildren cv d (arg _ _ ∷ ts)  = convertChildren cv d ts
 
 
   -- split a term at every occurrence of the `impl` constructor---
@@ -182,7 +170,7 @@ module Auto.Core where
   -- representing the premises of the rule---this means that for a
   -- term of the type `A → B` this function will generate a goal of
   -- type `B` and a premise of type `A`.
-  agda2goal×premises : AgType →  Error (∃ PsTerm × Rules)
+  agda2goal×premises : AgType →  Maybe (∃ PsTerm × Rules)
   agda2goal×premises t with convert convertVar4Goal 0 t
   ... | nothing             = nothing
   ... | just (n , p)        with split p
@@ -193,11 +181,13 @@ module Auto.Core where
       toPremises i [] = []
       toPremises i (t ∷ ts) = (n , rule (var i) t []) ∷ toPremises (pred i) ts
 
+
   -- A context is a deBruijn indexed list of the types of the variables.
   Ctx = List (AgType)
 
+
   -- convert an Agda context to a `HintDB`.
-  context2premises : (index : ℕ) → Ctx → Error Rules
+  context2premises : (index : ℕ) → Ctx → Maybe Rules
   context2premises i []       = just []
   context2premises i (t ∷ ts)
     with convert convertVar4Goal 0 t
@@ -210,7 +200,7 @@ module Auto.Core where
 
 
   -- convert an Agda name to a rule-term.
-  name2term : Name → AgType → Error (∃ Rule)
+  name2term : Name → AgType → Maybe (∃ Rule)
   name2term nm ty with convert convertVar4Term 0 ty
   ... | nothing            = nothing
   ... | just (n , t)        with split t
@@ -234,11 +224,12 @@ module Auto.Core where
 
     children2AgTerms : List Proof → TC (List (Arg AgTerm))
     children2AgTerms []       = return []
-    children2AgTerms (p ∷ ps) = proof2AgTerm p >>= (λ r → children2AgTerms ps >>= (λ cs → return (toArg r ∷ cs)))
+    children2AgTerms (p ∷ ps) = proof2AgTerm p
+                              >>= λ r  → children2AgTerms ps
+                              >>= λ cs → return (toArg r ∷ cs)
       where
         toArg : AgTerm → Arg AgTerm
         toArg = arg (arg-info visible relevant)
-
 
   intros : ℕ → AgTerm → AgTerm
   intros  zero   t = t
@@ -246,7 +237,6 @@ module Auto.Core where
 
   reify : ℕ → Proof → TC AgTerm
   reify n p = proof2AgTerm p >>= (return ∘ intros n)
-
 
   -- debugging facilities
   Debug = String

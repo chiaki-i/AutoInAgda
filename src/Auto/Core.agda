@@ -1,8 +1,7 @@
 open import Level                      using (Level)
 open import Function                   using (_∘_; id; flip)
 open import Data.Fin     as Fin        using (fromℕ)
-open import Data.Nat     as Nat        using (ℕ; suc; zero; pred; _+_; _⊔_)
-open import Data.Nat.Properties        using (≤-decTotalOrder)
+open import Data.Nat     as Nat        using (ℕ; suc; zero; pred; _+_; _⊔_; decTotalOrder)
 open import Data.List    as List       using (List; []; _∷_; [_]; concatMap; _++_; length; map)
 open import Data.Vec     as Vec        using (Vec; []; _∷_; _∷ʳ_; reverse; initLast; toList)
 open import Data.Product as Prod       using (∃; _×_; _,_; proj₁; proj₂)
@@ -19,7 +18,7 @@ open import Reflection renaming (Term to AgTerm; Type to AgType; _≟_ to _≟-A
 
 module Auto.Core where
 
-  open DecTotalOrder ≤-decTotalOrder using (total)
+  open DecTotalOrder decTotalOrder using (total)
 
   private
     ∃-syntax : ∀ {a b} {A : Set a} → (A → Set b) → Set (b Level.⊔ a)

@@ -41,7 +41,7 @@ auto depth db type ctx
   with agda2goal×premises type
 ... | nothing = nothing
 ... | just ((n , g) , args)
-  with context2premises (pred n) ctx
+  with context2premises (length args) ctx
 ... | nothing = nothing
 ... | just ctxs
   with dfs (suc depth) (solve g (fromRules ctxs ∙ (fromRules args ∙ db)))

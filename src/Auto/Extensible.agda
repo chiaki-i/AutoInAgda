@@ -36,15 +36,15 @@ private
 
 
 -- auto is not parametrized by Strategy anymore
-auto : ℕ → HintDB → Type → Ctx → Maybe (Debug × Maybe (TC Term))
-auto depth db type ctx
+auto : Strategy → ℕ → HintDB → Type → Ctx → Maybe (Debug × Maybe (TC Term))
+auto search depth db type ctx
   with agda2goal×premises type
 ... | nothing = nothing
 ... | just ((n , g) , args)
   with context2premises (length args) ctx
 ... | nothing = nothing
 ... | just ctxs
-  with dfs (suc depth) (solve g (fromRules ctxs ∙ (fromRules args ∙ db)))
+  with search (suc depth) (solve g (fromRules ctxs ∙ (fromRules args ∙ db)))
 ... | ([] , d)    = just ((unlines ∘ map showDebug) d , nothing)
 ... | (p ∷ _ , d) = just ((unlines ∘ map showDebug) d , just (reify (length args) p))
 

@@ -11,7 +11,10 @@ open import Reflection
 
 module Auto where
 
-open import Auto.Extensible simpleHintDB public using (auto; HintDB; _<<_; ε)
+open import Auto.Extensible simpleHintDB public using (HintDB; _<<_; ε; dfs; bfs) renaming (auto to auto′)
+
+-- auto by default uses depth-first search
+auto = auto′ dfs
 
 -- This is exported to debug for now
 _>>=_ = bindTC
@@ -60,7 +63,10 @@ private
   ... | just (_ , nothing)     = searchSpaceExhaustedError
 
   run : Auto → (Auto → Term → Type → Ctx → TC ⊤) → Term → TC ⊤
-  run a r h = inferType h >>= λ t → getContext >>= λ c → mkContext (length c) >>= λ ctx → r a h t ctx
+  run a r h = inferType h
+            >>= λ t → getContext
+            >>= λ c → mkContext (length c)
+            >>= λ ctx → r a h t ctx
 
 macro
   -- show debugging information.

@@ -3,17 +3,18 @@ open import Algebra                               using (module CommutativeSemir
 open import Function                              using (id; const; _∘_; _$_)
 open import Coinduction                           using (∞; ♯_; ♭)
 open import Data.Fin        as Fin                using (Fin; suc; zero)
-open import Data.List       as List               using (List; _∷_; []; [_]; _++_; length; concat; foldr; concatMap; zipWith; reverse; downFrom)
+open import Data.List       as List               using (List; _∷_; _∷ʳ_; []; [_]; _++_; length; concat; foldr; concatMap; zipWith; reverse; downFrom)
 open import Data.Maybe                            using (Maybe; just; nothing)
 open import Data.Nat                              using (ℕ; suc; zero; _≤_; z≤n; s≤s; decTotalOrder)
 open import Data.Nat.Properties                   using (commutativeSemiring; distributiveLattice)
-open import Data.Product    as Prod               using (∃; _×_; _,_; map)
+open import Data.Product    as Prod               using (∃; _×_; _,_; proj₁)
 open import Data.Sum                              using (_⊎_; inj₁; inj₂)
 open import Data.Vec        as Vec                using (Vec; _∷_; []; fromList)
 open import Data.Bool                             using (Bool; true; false)
 open import Relation.Nullary                      using (Dec; yes; no)
 open import Relation.Binary                       using (module DecTotalOrder)
 open import Relation.Binary.PropositionalEquality using (_≡_; refl; sym; trans; cong; subst)
+
 
 
 module ProofSearch
@@ -253,37 +254,39 @@ module ProofSearch
   ----------------------------------------------------------------------------
 
   Strategy : Set₁
-  Strategy = ∀ {A B} (depth : ℕ) → SearchTree A B → List A
+  Strategy = ∀ {A B} (depth : ℕ) → SearchTree A B → List A × List (List ℕ × Bool × B × ℕ)
 
 
-  dfs' : ∀ {A B} (depth : ℕ) → (ℕ × List ℕ) → SearchTree A B → (List A × List ((List ℕ × Bool × B × ℕ)))
-  dfs' zero (n , p) (fail-leaf l)   = ([]     , (suc n ∷ p , true  , l , zero) ∷ [])
-  dfs' zero (n , p) (succ-leaf l x) = (x ∷ [] , (suc n ∷ p , false , l , zero) ∷ [])
-  dfs' zero (n , p) (node l _)      = ([]     , (suc n ∷ p , false , l , zero) ∷ [])
+  dfs' : ∀ {A B} (depth : ℕ) → (ℕ × List ℕ) → SearchTree A B → List A × List ((List ℕ × Bool × B × ℕ))
+  dfs' zero _ _ = ([] , [])
   dfs' (suc k) (n , p) (fail-leaf l)     = ([]     , (suc n ∷ p , true  , l , suc k) ∷ [])
   dfs' (suc k) (n , p) (succ-leaf l x)   = (x ∷ [] , (suc n ∷ p , false , l , suc k) ∷ [])
   dfs' (suc k) (n , p) (node l xs )
     with foldr  (λ {x ( m , ( ys , zs )) →  let (y , z) = dfs' k (m , suc n ∷ p) (♭ x)
-                                            in  (suc m , (y ∷ ys , z ∷ zs))})
+                                            in  (suc m , (ys ∷ʳ y , zs ∷ʳ z))})
                 (0 , ([] , [])) xs
   ... | _ , a , b = (concat a , ((suc n ∷ p), false , l , suc k) ∷ concat b)
 
-  dfs : ∀ {A B} (depth : ℕ) → SearchTree A B → (List A × List (List ℕ × Bool × B × ℕ))
+  dfs : Strategy
   dfs d s = dfs' d (0 , []) s
 
+
   bfs : Strategy
-  bfs depth t = concat (Vec.toList (bfsAcc depth t))
+  bfs depth t = foldr (λ { (x , y) (xs , ys) → (x ++ xs , y ++ ys)}) ([] , []) (Vec.toList (bfsAcc depth (0 , []) t))
     where
-      merge : ∀ {A : Set} {k} → (xs ys : Vec (List A) k) → Vec (List A) k
+      merge : ∀ {A B : Set} {k} → (xs ys : Vec (List A × List B) k) → Vec (List A × List B) k
       merge [] [] = []
-      merge (x ∷ xs) (y ∷ ys) = (x ++ y) ∷ merge xs ys
+      merge ((x₁ , x₂) ∷ xs) ((y₁ , y₂) ∷ ys) = ((x₁ ++ y₁) , (x₂ ++ y₂)) ∷ merge xs ys
 
-      empty : ∀ {A : Set} {k} → Vec (List A) k
+      empty : ∀ {A B : Set} {k} → Vec (List A × List ((List ℕ × Bool × B × ℕ))) k
       empty {k = zero}  = []
-      empty {k = suc k} = [] ∷ empty
+      empty {k = suc k} = ([] , []) ∷ empty
 
-      bfsAcc : ∀ {A B} (depth : ℕ) → SearchTree A B → Vec (List A) depth
-      bfsAcc  zero   _         = []
-      bfsAcc (suc k) (fail-leaf _  )  = [] ∷ empty
-      bfsAcc (suc k) (succ-leaf _ x)  = (x ∷ []) ∷ empty
-      bfsAcc (suc k) (node _ xs) = [] ∷ foldr merge empty (List.map (λ x → bfsAcc k (♭ x)) xs)
+      bfsAcc : ∀ {A B} (depth : ℕ) → (ℕ × List ℕ) → SearchTree A B → Vec (List A × List ((List ℕ × Bool × B × ℕ))) depth
+      bfsAcc  zero _  _        = []
+      bfsAcc (suc k) (n , p) (fail-leaf l  )  = ([]     , (suc n ∷ p , true  , l , suc k) ∷ []) ∷ empty
+      bfsAcc (suc k) (n , p) (succ-leaf l x)  = (x ∷ [] , (suc n ∷ p , false , l , suc k) ∷ [] ) ∷ empty
+      bfsAcc (suc k) (n , p) (node l xs) =
+        ([] , [ (suc n ∷ p , false , l , suc k) ])
+        ∷ proj₁ (foldr (λ {x (vs , m) → (merge vs (bfsAcc k (m , suc n ∷ p) (♭ x)) , suc m)})
+                (empty , 0) xs)

@@ -253,19 +253,28 @@ module ProofSearch
   -- * define various search strategies                                   * --
   ----------------------------------------------------------------------------
 
+  -- debug information collected by the proof search
+  record Debug (B : Set) : Set where
+    constructor debug
+    field
+      index  : List ℕ
+      depth  : ℕ
+      fail?  : Bool
+      info   : B
+
   Strategy : Set₁
-  Strategy = ∀ {A B} (depth : ℕ) → SearchTree A B → List A × List (List ℕ × Bool × B × ℕ)
+  Strategy = ∀ {A B} (depth : ℕ) → SearchTree A B → List A × List (Debug B)
 
 
-  dfs' : ∀ {A B} (depth : ℕ) → (ℕ × List ℕ) → SearchTree A B → List A × List ((List ℕ × Bool × B × ℕ))
+  dfs' : ∀ {A B} (depth : ℕ) → (ℕ × List ℕ) → SearchTree A B → List A × List (Debug B)
   dfs' zero _ _ = ([] , [])
-  dfs' (suc k) (n , p) (fail-leaf l)     = ([]     , (suc n ∷ p , true  , l , suc k) ∷ [])
-  dfs' (suc k) (n , p) (succ-leaf l x)   = (x ∷ [] , (suc n ∷ p , false , l , suc k) ∷ [])
+  dfs' (suc k) (n , p) (fail-leaf l)     = []     , [ debug (suc n ∷ p) (suc k) true  l ]
+  dfs' (suc k) (n , p) (succ-leaf l x)   = [ x ]  , [ debug (suc n ∷ p) (suc k) false l ]
   dfs' (suc k) (n , p) (node l xs )
     with foldr  (λ {x ( m , ( ys , zs )) →  let (y , z) = dfs' k (m , suc n ∷ p) (♭ x)
                                             in  (suc m , (ys ∷ʳ y , zs ∷ʳ z))})
                 (0 , ([] , [])) xs
-  ... | _ , a , b = (concat a , ((suc n ∷ p), false , l , suc k) ∷ concat b)
+  ... | _ , a , b = (concat a , (debug (suc n ∷ p) (suc k) false l) ∷ concat b)
 
   dfs : Strategy
   dfs d s = dfs' d (0 , []) s
@@ -278,15 +287,15 @@ module ProofSearch
       merge [] [] = []
       merge ((x₁ , x₂) ∷ xs) ((y₁ , y₂) ∷ ys) = ((x₁ ++ y₁) , (x₂ ++ y₂)) ∷ merge xs ys
 
-      empty : ∀ {A B : Set} {k} → Vec (List A × List ((List ℕ × Bool × B × ℕ))) k
+      empty : ∀ {A B : Set} {k} → Vec (List A × List B) k
       empty {k = zero}  = []
       empty {k = suc k} = ([] , []) ∷ empty
 
-      bfsAcc : ∀ {A B} (depth : ℕ) → (ℕ × List ℕ) → SearchTree A B → Vec (List A × List ((List ℕ × Bool × B × ℕ))) depth
+      bfsAcc : ∀ {A B} (depth : ℕ) → (ℕ × List ℕ) → SearchTree A B → Vec (List A × List (Debug B)) depth
       bfsAcc  zero _  _        = []
-      bfsAcc (suc k) (n , p) (fail-leaf l  )  = ([]     , (suc n ∷ p , true  , l , suc k) ∷ []) ∷ empty
-      bfsAcc (suc k) (n , p) (succ-leaf l x)  = (x ∷ [] , (suc n ∷ p , false , l , suc k) ∷ [] ) ∷ empty
+      bfsAcc (suc k) (n , p) (fail-leaf l  )  = ([]    , [ debug (suc n ∷ p) (suc k) true  l ]) ∷ empty
+      bfsAcc (suc k) (n , p) (succ-leaf l x)  = ([ x ] , [ debug (suc n ∷ p) (suc k) false l ]) ∷ empty
       bfsAcc (suc k) (n , p) (node l xs) =
-        ([] , [ (suc n ∷ p , false , l , suc k) ])
+        ([] , [ debug (suc n ∷ p) (suc k) false l ])
         ∷ proj₁ (foldr (λ {x (vs , m) → (merge vs (bfsAcc k (m , suc n ∷ p) (♭ x)) , suc m)})
                 (empty , 0) xs)

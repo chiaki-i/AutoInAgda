@@ -21,13 +21,15 @@ open PsExtensible instHintDB public
 open Auto.Core               public using (dfs; bfs)
 
 private
+  open Debug
+
   -- show debuging information
-  showDebug : (List ℕ × Bool × Maybe RuleName × ℕ) → String
-  showDebug (l , b , nm , d) =
-    maybe′  (λ rn → foldr _++_ "" ((foldr _++_ "" ∘ intersperse "." ∘ map showNat ∘ reverse $ l)
-                                  ∷ " depth="  ∷ showNat d
+  showDebug : Debug (Maybe RuleName) → String
+  showDebug d =
+    maybe′  (λ rn → foldr _++_ "" ((foldr _++_ "" ∘ intersperse "." ∘ map showNat ∘ reverse $ (index d))
+                                  ∷ " depth="  ∷ showNat (depth d)
                                   ∷ " " ∷ showRuleName rn
-                                  ∷ " " ∷ [ if b then "×" else "✓" ])) "" nm
+                                  ∷ " " ∷ [ if (fail? d) then "×" else "✓" ])) "" (info d)
       where
         showRuleName : RuleName → String
         showRuleName (name x) = fromList ∘ reverse ∘ takeWhile (not ∘ (_== '.'))
@@ -35,8 +37,8 @@ private
         showRuleName (var x)  = "var" ++ " " ++ showNat x
 
 
--- auto is not parametrized by Strategy anymore
-auto : Strategy → ℕ → HintDB → Type → Ctx → Maybe (Debug × Maybe (TC Term))
+-- auto
+auto : Strategy → ℕ → HintDB → Type → Ctx → Maybe (String × Maybe (TC Term))
 auto search depth db type ctx
   with agda2goal×premises type
 ... | nothing = nothing

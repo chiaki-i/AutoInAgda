@@ -237,9 +237,3 @@ module Auto.Core where
 
   reify : ℕ → Proof → TC AgTerm
   reify n p = proof2AgTerm p >>= (return ∘ intros n)
-
-  -- debugging facilities
-  Debug = String
-
-  debug2String : Debug → String
-  debug2String = λ x → x

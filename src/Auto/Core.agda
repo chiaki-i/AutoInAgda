@@ -1,14 +1,12 @@
-open import Level                      using (Level)
 open import Function                   using (_∘_; id; flip)
-open import Data.Fin     as Fin        using (fromℕ)
-open import Data.Nat     as Nat        using (ℕ; suc; zero; pred; _+_; _⊔_; decTotalOrder)
+open import Data.Nat     as Nat        using (ℕ; suc; zero; pred)
 open import Data.List    as List       using (List; []; _∷_; [_]; concatMap; _++_; length; map)
-open import Data.Vec     as Vec        using (Vec; []; _∷_; _∷ʳ_; reverse; initLast; toList)
-open import Data.Product as Prod       using (∃; _×_; _,_; proj₁; proj₂)
+open import Data.Product as Prod       using (_×_; _,_)
 open import Data.Maybe   as Maybe      using (Maybe; just; nothing; maybe)
 open import Data.Maybe.Extra           using (_<$-m>_)
-open import Reflection renaming (_≟_ to _≟-AgTerm_; bindTC to _>>=_; returnTC to return)
-open import Data.Bool using (true; false)
+open import Data.Bool                  using (true; false)
+open import Reflection
+open import Data.TC.Extra              using (return; _>>=_) 
 
 module Auto.Core where
 

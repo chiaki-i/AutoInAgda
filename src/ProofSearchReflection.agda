@@ -75,62 +75,63 @@ module ProofSearchReflection
     fromRules []             = ε
     fromRules (r ∷ rs) = ret r ∙ fromRules rs
 
-    newMetaArg : Arg Term → TC Meta
-    newMetaArg (arg i x) = newMeta x
-      >>= (λ { (meta m [])    → return m
-             ; _              → typeError (strErr "newMetaArg" ∷ []) })
+  newMetaArg : Arg Term → TC Meta
+  newMetaArg (arg i x) = newMeta x
+    >>= (λ { (meta m args)  → return m
+           ; (lit (meta m)) → return m
+           ; _             → typeError (strErr "newMetaArg" ∷ []) })
 
-    unArg : ∀ {A : Set} → Arg A → A
-    unArg (arg i x) = x
+  unArg : ∀ {A : Set} → Arg A → A
+  unArg (arg i x) = x
 
-    {-# TERMINATING #-}
-    inst-term : List Meta → Term → Maybe Term
-    inst-term ms (var x args)  = meta <$-m> index ms x
-                                      <*-m> mapM-m (traverse-m-arg (inst-term ms))
+  {-# TERMINATING #-}
+  inst-term : List Meta → Term → Maybe Term
+  inst-term ms (var x args)  = meta <$-m> index ms x
+                                    <*-m> mapM-m (traverse-m-arg (inst-term ms))
+                                          args
+  inst-term ms (con c args)  = con c <$-m> mapM-m (traverse-m-arg (inst-term ms))
                                             args
-    inst-term ms (con c args)  = con c <$-m> mapM-m (traverse-m-arg (inst-term ms))
-                                             args
-    inst-term ms (def c args)  = def c <$-m> mapM-m (traverse-m-arg (inst-term ms))
-                                             args
-    inst-term ms (lam v (abs s x)) = lam v <$-m> (abs s <$-m> inst-term ms x)
-    inst-term ms (pat-lam _ _)     = nothing
-    inst-term ms (pi a (abs s x))  = pi <$-m> (traverse-m-arg (inst-term ms)) a
-                                       <*-m> (abs s <$-m> inst-term ms x)
-    inst-term ms (sort s)    = just (sort s)
-    inst-term ms (lit l)     = just (lit l)
-    inst-term ms (meta x args) = meta x <$-m> mapM-m (traverse-m-arg (inst-term ms))                                             args
-    inst-term ms unknown = just unknown
+  inst-term ms (def c args)  = def c <$-m> mapM-m (traverse-m-arg (inst-term ms))
+                                            args
+  inst-term ms (lam v (abs s x)) = lam v <$-m> (abs s <$-m> inst-term ms x)
+  inst-term ms (pat-lam _ _)     = nothing
+  inst-term ms (pi a (abs s x))  = pi <$-m> (traverse-m-arg (inst-term ms)) a
+                                      <*-m> (abs s <$-m> inst-term ms x)
+  inst-term ms (sort s)    = just (sort s)
+  inst-term ms (lit l)     = just (lit l)
+  inst-term ms (meta x args) = meta x <$-m> mapM-m (traverse-m-arg (inst-term ms))                                             args
+  inst-term ms unknown = just unknown
 
 
-    aux : List Meta × List (Arg Term) → Arg Term → TC (List Meta × List (Arg Term))
-    aux (ms , ips) a with traverse-m-arg (inst-term ms) a
-    ... | nothing = typeError [ strErr "aux" ]
-    ... | just ip = newMetaArg ip >>= (λ m → return ((m ∷ ms) , ips ∷ʳ ip))
+  aux : List Meta × List (Arg Term) → Arg Term → TC (List Meta × List (Arg Term))
+  aux (ms , ips) a with traverse-m-arg (inst-term ms) a
+  ... | nothing = typeError [ strErr "aux" ]
+  ... | just ip = newMetaArg ip >>= (λ m → return ((m ∷ ms) , ips ∷ʳ ip))
 
 
-    inst-rule : Rule → TC Rule
-    inst-rule r with skolem? r
-    ... | true  = return (rule true
-                               (rname r)
-                               (conclusion r)
-                               (filter visible? (premises r)))
-    ... | false = foldlM-tc aux ([] , []) (premises r)
-                  >>= λ { (ms , prems) →
-                  maybe (λ ips → return (rule false (rname r)
-                                        ips
-                                        (filter visible? prems))) 
-                        (typeError [ strErr "inst-rule" ])
-                        (inst-term ms (conclusion r)) }
+  inst-rule : Rule → TC Rule
+  inst-rule r with skolem? r
+  ... | true  = return (rule true
+                              (rname r)
+                              (conclusion r)
+                              (filter visible? (premises r)))
+  ... | false = foldlM-tc aux ([] , []) (premises r)
+                >>= λ { (ms , prems) →
+                maybe (λ ips → return (rule false (rname r)
+                                      ips
+                                      (filter visible? prems))) 
+                      (typeError [ strErr "inst-rule" ])
+                      (inst-term ms (conclusion r)) }
 
-    unify-concl : Term → Rule → TC Bool
-    unify-concl t r = catchTC (unify (conclusion r) t >>= λ _ → return true)
-                            (return false)
-  -- ----------------------------------------------------------------------------
-  -- -- * define simple hint databases                                       * --
-  -- ----------------------------------------------------------------------------
+  unify-concl : Term → Rule → TC Bool
+  unify-concl t r = catchTC (unify (conclusion r) t >>= λ _ → return true)
+                          (return false)
+  ----------------------------------------------------------------------------
+  -- * define simple hint databases                                       * --
+  ----------------------------------------------------------------------------
 
-    simpleHintDB : IsHintDB
-    simpleHintDB = record
+  simpleHintDB : IsHintDB
+  simpleHintDB = record
       { HintDB   = Rules
       ; Hint     = Rule
       ; getHints = id

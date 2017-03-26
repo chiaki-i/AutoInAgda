@@ -11,7 +11,7 @@ open import Reflection
 
 module Auto where
 
-open import Auto.Extensible simpleHintDB public using (HintDB; _<<_; ε; dfs; bfs) renaming (auto to auto′)
+open import Auto.Extensible simpleHintDB public using (HintDB; _<<_; ε; dfs) renaming (auto to auto′)
 
 -- auto by default uses depth-first search
 auto = auto′ dfs
@@ -37,30 +37,30 @@ private
   searchSpaceExhaustedError : ∀ {A : Set} → TC A
   searchSpaceExhaustedError = typeError (assembleError [ strErr "Error: Search space exhausted, solution not found." ])
 
-  Auto = Type → Ctx → Maybe (String × Maybe (TC Term))
+  Auto = Type → Ctx → TC (Maybe Term)
 
-  showInfo : Auto → Term → Type → Ctx → TC ⊤
-  showInfo a h t ctx with a t ctx
-  ... | nothing = unsupportedSyntaxError
-  ... | just (d , just x)      =
-    typeError (assembleError (strErr "Success Solution found. The trace generated is:" ∷
-    strErr d ∷ []))
-  ... | just (d , nothing)     =
-    typeError (assembleError (strErr "Error: Solution not found. The trace generated is:" ∷
-    strErr d ∷ []))
+  -- showInfo : Auto → Term → Type → Ctx → TC ⊤
+  -- showInfo a h t ctx with a t ctx
+  -- ... | nothing = unsupportedSyntaxError
+  -- ... | just (d , just x)      =
+  --   typeError (assembleError (strErr "Success Solution found. The trace generated is:" ∷
+  --   strErr d ∷ []))
+  -- ... | just (d , nothing)     =
+  --   typeError (assembleError (strErr "Error: Solution not found. The trace generated is:" ∷
+  --   strErr d ∷ []))
 
   printTerm : Auto → Term → Type → Ctx → TC ⊤
-  printTerm a h t ctx with a t ctx
-  ... | nothing = unsupportedSyntaxError
-  ... | just (_ , nothing)     = searchSpaceExhaustedError
-  ... | just (_ , just x)      = x >>=
-    λ t → typeError (assembleError (strErr "Success: The Term found by auto is:\n" ∷ termErr t ∷ []))
+  printTerm a h t ctx = a t ctx >>= λ { nothing  → searchSpaceExhaustedError
+                                      ; (just t) → typeError (assembleError (strErr "Success: The Term found by auto is:\n" ∷ termErr t ∷ []))}
+  -- ... | nothing = unsupportedSyntaxError
+  -- ... | just (_ , nothing)     = searchSpaceExhaustedError
+  -- ... | just (_ , just x)      = x >>=
+    -- λ t → 
 
   applyTerm : Auto → Term → Type → Ctx → TC ⊤
-  applyTerm a h t ctx with a t ctx
-  ... | nothing = unsupportedSyntaxError
-  ... | just (_ , just x)      = x >>= unify h
-  ... | just (_ , nothing)     = searchSpaceExhaustedError
+  applyTerm a h t ctx = a t ctx >>= λ { nothing  → searchSpaceExhaustedError
+                                      ; (just term) → checkType term t >>= unify h}
+
 
   run : Auto → (Auto → Term → Type → Ctx → TC ⊤) → Term → TC ⊤
   run a r h = inferType h
@@ -69,14 +69,14 @@ private
             >>= λ ctx → r a h t ctx
 
 macro
-  -- show debugging information.
-  info : (Type → Ctx → Maybe (String × Maybe (TC Term))) → (Term → TC ⊤)
-  info m = run m showInfo
+  -- -- show debugging information.
+  -- info : (Type → Ctx → Maybe (String × Maybe (TC Term))) → (Term → TC ⊤)
+  -- info m = run m showInfo
 
   -- print the resulting Term if any found.
-  print : (Type → Ctx → Maybe (String × Maybe (TC Term))) → (Term → TC ⊤)
+  print : Auto → (Term → TC ⊤)
   print m = run m printTerm
 
   -- apply the Term found if any.
-  apply : (Type → Ctx → Maybe (String × Maybe (TC Term))) → (Term → TC ⊤)
+  apply : Auto → (Term → TC ⊤)
   apply m = run m applyTerm

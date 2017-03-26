@@ -10,52 +10,57 @@ open import Data.Char     using (_==_)
 open import Data.Bool     using (Bool; true; false; not; if_then_else_)
 open import Data.Maybe    using (Maybe; just; nothing; maybe′)
 open import Reflection    using (Type; Term; Arg; Name; TC; quoteTC; getType; showName)
-                          renaming (bindTC to _>>=_; returnTC to return; unify to unifyTC)
+                          renaming (unify to unifyTC)
 
+open import Data.Maybe.Extra
+open import Data.TC.Extra
+open import Data.List.Extra
 
 module Auto.Extensible (instHintDB : IsHintDB) where
 
 
-open IsHintDB     instHintDB public renaming (return to returnHintDB)
+open IsHintDB     instHintDB public
 open PsExtensible instHintDB public
-open Auto.Core               public using (dfs; bfs)
+open Auto.Core               public using (dfs)
 
-private
-  open Debug
+-- private
+  -- open Debug
 
-  -- show debuging information
-  showDebug : Debug (Maybe RuleName) → String
-  showDebug d =
-    maybe′  (λ rn → foldr _++_ "" ((foldr _++_ "" ∘ intersperse "." ∘ map showNat ∘ reverse $ (index d))
-                                  ∷ " depth="  ∷ showNat (depth d)
-                                  ∷ " " ∷ showRuleName rn
-                                  ∷ " " ∷ [ if (fail? d) then "×" else "✓" ])) "" (info d)
-      where
-        showRuleName : RuleName → String
-        showRuleName (name x) = fromList ∘ reverse ∘ takeWhile (not ∘ (_== '.'))
-                                         ∘ reverse ∘ toList $ showName x
-        showRuleName (var x)  = "var" ++ " " ++ showNat x
+  -- -- show debuging information
+  -- showDebug : Debug (Maybe RuleName) → String
+  -- showDebug d =
+  --   maybe′  (λ rn → foldr _++_ "" ((foldr _++_ "" ∘ intersperse "." ∘ map showNat ∘ reverse $ (index d))
+  --                                 ∷ " depth="  ∷ showNat (depth d)
+  --                                 ∷ " " ∷ showRuleName rn
+  --                                 ∷ " " ∷ [ if (fail? d) then "×" else "✓" ])) "" (info d)
+  --     where
+  --       showRuleName : RuleName → String
+  --       showRuleName (name x) = fromList ∘ reverse ∘ takeWhile (not ∘ (_== '.'))
+  --                                        ∘ reverse ∘ toList $ showName x
+  --       showRuleName (var x)  = "var" ++ " " ++ showNat x
 
+m-t : ∀ {A : Set} → Maybe (TC A) → TC (Maybe A)
+m-t (just x) = just <$-tc> x
+m-t nothing  = return nothing
 
+t-m : ∀ {A : Set} → TC (Maybe A) → Maybe (TC A)
+t-m t = {!!}
 -- auto
-auto : Strategy → ℕ → HintDB → Type → Ctx → Maybe (String × Maybe (TC Term))
+auto : Strategy → ℕ → HintDB → Type → Ctx → TC (Maybe Term)
 auto search depth db type ctx
   with agda2goal×premises type
-... | nothing = nothing
-... | just ((n , g) , args)
+... | (g , args)
   with context2premises (length args) ctx
-... | nothing = nothing
-... | just ctxs
+... | ctxs
   with search (suc depth) (solve g (fromRules ctxs ∙ (fromRules args ∙ db)))
-... | ([] , d)    = just ((unlines ∘ map showDebug) d , nothing)
-... | (p ∷ _ , d) = just ((unlines ∘ map showDebug) d , just (reify (length args) p))
+... | p = (safe-head <$-tc> p) >>= m-t ∘ (reify (length args) <$-m>_)  -- ([] , d)    =  ? -- just ((unlines ∘ map showDebug) d , nothing)
+-- ... | (p ∷ _ , d) =  ? -- just ((unlines ∘ map showDebug) d , just (reify (length args) p))
 
 
 -- HintDB
 private
-  mkHintDB : HintDB → Maybe (∃ Rule) → HintDB
-  mkHintDB db nothing        = db
-  mkHintDB db (just (_ , r)) = (returnHintDB r) ∙ db
+  mkHintDB : HintDB → Rule → HintDB
+  mkHintDB db r = (ret r) ∙ db
 
 infixl 5 _<<_
 

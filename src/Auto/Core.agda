@@ -28,21 +28,23 @@ module Auto.Core where
   telView a = [] , a
 
   -- convert an Agda name to a rule-term.
-  name2term : Name → Type → Rule
-  name2term nm t with telView t
+  name2rule : Name → Type → Rule
+  name2rule nm t with telView t
   ... | prems , concl = rule false (name nm) concl prems
 
   -- convert an Agda term to a goal-term, together with a `HintDB`
   -- representing the premises of the rule---this means that for a
   -- term of the type `A → B` this function will generate a goal of
   -- type `B` and a premise of type `A`.
+  -- in case the argument is not visible we just ignore it.
   agda2goal×premises : Type → Term × Rules
   agda2goal×premises t with telView t
   ... | prems , goal = goal , toPremises 0 prems
     where
       toPremises : ℕ → List (Arg Term) → Rules
       toPremises i [] = []
-      toPremises i (arg _ t ∷ ts) = rule true (var i) t [] ∷ toPremises (pred i) ts
+      toPremises i (arg (arg-info visible r) t ∷ ts) = rule true (var i) t [] ∷ toPremises (pred i) ts
+      toPremises i (arg (arg-info _′      r) _ ∷ ts) = toPremises i ts 
 
   -- A context is a deBruijn indexed list of the types of the variables.
   Ctx = List Type

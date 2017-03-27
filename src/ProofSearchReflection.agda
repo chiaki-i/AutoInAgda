@@ -90,16 +90,17 @@ module ProofSearchReflection
                                     <*-m> mapM-m (traverse-m-arg (inst-term ms))
                                           args
   inst-term ms (con c args)  = con c <$-m> mapM-m (traverse-m-arg (inst-term ms))
-                                            args
+                                           args
   inst-term ms (def c args)  = def c <$-m> mapM-m (traverse-m-arg (inst-term ms))
-                                            args
+                                           args
   inst-term ms (lam v (abs s x)) = lam v <$-m> (abs s <$-m> inst-term ms x)
   inst-term ms (pat-lam _ _)     = nothing
   inst-term ms (pi a (abs s x))  = pi <$-m> (traverse-m-arg (inst-term ms)) a
                                       <*-m> (abs s <$-m> inst-term ms x)
   inst-term ms (sort s)    = just (sort s)
   inst-term ms (lit l)     = just (lit l)
-  inst-term ms (meta x args) = meta x <$-m> mapM-m (traverse-m-arg (inst-term ms))                                             args
+  inst-term ms (meta x args) = meta x <$-m> mapM-m (traverse-m-arg (inst-term ms))
+                                            args
   inst-term ms unknown = just unknown
 
 
@@ -123,9 +124,6 @@ module ProofSearchReflection
                       (typeError [ strErr "inst-rule" ])
                       (inst-term ms (conclusion r)) }
 
-  unify-concl : Term → Rule → TC Bool
-  unify-concl t r = catchTC (unify (conclusion r) t >>= λ _ → return true)
-                          (return false)
   ----------------------------------------------------------------------------
   -- * define simple hint databases                                       * --
   ----------------------------------------------------------------------------
@@ -188,12 +186,10 @@ module ProofSearchReflection
         solveAcc (suc k , g ∷ gs , p) db = node (mapM-tc step (getHints db))
           where
             step : Hint → TC (SearchTree (Proof))
-            step h =   inst-rule (getRule h)
-                   >>= λ ir → unify-concl g ir
-                   >>= λ { false  → return (node (return []))
-                         ; true   → return (solveAcc 
-                                           (prf ir)
-                                           db)}
+            step h = catchTC (inst-rule (getRule h)
+                              >>= λ ir → unify g (conclusion ir)
+                              >>= λ _  → return (solveAcc (prf ir) db))
+                             (return (node (return [])))
               where
                 prf : Rule → Proof′
                 prf r = (length (premises r) + k) , prm′ , (p ∘ con′ r)
@@ -205,6 +201,7 @@ module ProofSearchReflection
   ----------------------------------------------------------------------------
   -- * define various search strategies                                   * --
   ----------------------------------------------------------------------------
+
   Strategy = ∀ {A : Set} → (depth : ℕ) → SearchTree A -> TC (List A)
 
   dfs : ∀ {A : Set} → (depth : ℕ) → SearchTree A -> TC (List A)
@@ -212,35 +209,3 @@ module ProofSearchReflection
   dfs (suc k) (leaf x)  = return (x ∷ [])
   dfs (suc k) (node xs) =
     xs >>= λ xs′ → List.concat <$-tc> sequence-tc (List.map (dfs k) xs′)
-
-  -- -- macro
-  -- --   n : Name → Term → TC ⊤
-  -- --   n nm h = name2rule nm >>= (λ {(just x) → quoteTC x >>= (λ t → unify t h)
-  -- --                                ; nothing → typeError [ strErr "nm" ]})
-
-  -- --   inst : Rule PsTerm → Term → TC ⊤
-  -- --   inst r h = inst-rule r >>= (λ x → quoteTC x >>= (λ t → normalise t >>= λ a → typeError [ termErr a ]))
-
-  -- --   getTDef : Name → Term → TC ⊤
-  -- --   getTDef nm h = getType nm >>= quoteTC >>= λ t → normalise t >>= λ t → typeError (termErr t ∷ []) 
-
-
-
-  -- -- sequence-TC : ∀ {A : Set} → List (TC A) → TC (List A)
-  -- -- sequence-TC []       = return []
-  -- -- sequence-TC (x ∷ xs) = x >>= (λ x′ → sequence-TC xs >>= (λ xs′ → return (x′ ∷ xs′)))
-
-
-  -- -- safe-head : ∀ {A : Set} → List A → Maybe A
-  -- -- safe-head [] = nothing
-  -- -- safe-head (x ∷ _) = just x
-
-  -- -- macro
-  -- --   auto : (depth : ℕ) → HintDB → Term → TC ⊤
-  -- --   auto depth db h = inferType h >>= (λ t → safe-head <$-tc> (dfs depth (solve t db)) >>=  λ ls → quoteTC ls >>= λ ls → normalise ls  >>= (λ ls' → typeError ([ termErr ls' ]))) 
-
-  -- -- db : HintDB
-  -- -- db = isEven0-rule ∷ isEven+2-rule ∷ even+-rule ∷ []
-
-  -- -- example3 : Even 20
-  -- -- example3 = {!auto 12 db!}

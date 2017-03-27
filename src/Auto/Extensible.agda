@@ -67,5 +67,5 @@ infixl 5 _<<_
 macro
   _<<_ : HintDB → Name → (Term → TC ⊤)
   db << nm = λ h   → getType nm
-           >>= λ t → quoteTC (mkHintDB db (name2term nm t))
+           >>= λ t → quoteTC (mkHintDB db (name2rule nm t))
            >>= unifyTC h

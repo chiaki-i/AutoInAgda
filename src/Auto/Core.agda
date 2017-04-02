@@ -7,6 +7,7 @@ open import Data.Maybe.Extra           using (_<$-m>_)
 open import Data.Bool                  using (true; false)
 open import Reflection
 open import Data.TC.Extra              using (return; _>>=_) 
+open import Unification
 
 module Auto.Core where
 
@@ -17,7 +18,7 @@ module Auto.Core where
     var   : ℕ    → RuleName
 
   -- -- now we can load the definitions from proof search
-  open import ProofSearchReflection RuleName
+  open import ProofSearchReflection RuleName myunify2
     as PS public renaming (module Extensible to PsExtensible)
 
 

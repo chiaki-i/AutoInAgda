@@ -4,10 +4,10 @@ open import Data.Nat   using (ℕ; suc; zero)
 
 module Data.List.Extra where
 
-index : ∀ {A : Set} → List A → ℕ → Maybe A
-index [] z = nothing
-index (x ∷ _)  zero    = just x
-index (x ∷ xs) (suc z) = index xs z
+lookup : ∀ {A : Set} → List A → ℕ → Maybe A
+lookup [] z = nothing
+lookup (x ∷ _)  zero    = just x
+lookup (x ∷ xs) (suc z) = lookup xs z
 
 safe-head : ∀ {A : Set} → List A → Maybe A
 safe-head []      = nothing

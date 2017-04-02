@@ -3,7 +3,7 @@ open import Reflection
 open import Data.Maybe as Maybe
 open import Data.Product
 open import Data.Unit
-open import Data.Nat                              using (ℕ; suc; zero; _+_)
+open import Data.Nat        as Nat                using (ℕ; suc; zero; _+_)
 open import Level                                 using (_⊔_)
 open import Function                              using (id; const; _∘_; _$_)
 open import Data.Vec        as Vec                using (Vec; _∷_; []; fromList)
@@ -11,9 +11,11 @@ open import Data.TC.Extra
 open import Data.Maybe.Extra
 open import Data.List.Extra
 open import Data.Bool
+open import Relation.Nullary
 
 module ProofSearchReflection
   (RuleName : Set )
+  (unify′    : Term → Term → TC ⊤)
   where
 
   ----------------------------------------------------------------------------
@@ -75,20 +77,17 @@ module ProofSearchReflection
     fromRules []             = ε
     fromRules (r ∷ rs) = ret r ∙ fromRules rs
 
-  newMetaArg : Arg Term → TC Meta
+  newMetaArg : Arg Term → TC Term
   newMetaArg (arg i x) = newMeta x
-    >>= (λ { (meta m args)  → return m
-           ; (lit (meta m)) → return m
-           ; _             → typeError (strErr "newMetaArg" ∷ []) })
 
   unArg : ∀ {A : Set} → Arg A → A
   unArg (arg i x) = x
 
   {-# TERMINATING #-}
-  inst-term : List Meta → Term → Maybe Term
-  inst-term ms (var x args)  = meta <$-m> index ms x
-                                    <*-m> mapM-m (traverse-m-arg (inst-term ms))
-                                          args
+  inst-term : List (Maybe Term) → Term → Maybe Term
+  inst-term ms (var x args) with lookup ms x
+  ... | nothing = nothing
+  ... | just m  = m
   inst-term ms (con c args)  = con c <$-m> mapM-m (traverse-m-arg (inst-term ms))
                                            args
   inst-term ms (def c args)  = def c <$-m> mapM-m (traverse-m-arg (inst-term ms))
@@ -104,25 +103,32 @@ module ProofSearchReflection
   inst-term ms unknown = just unknown
 
 
-  aux : List Meta × List (Arg Term) → Arg Term → TC (List Meta × List (Arg Term))
-  aux (ms , ips) a with traverse-m-arg (inst-term ms) a
+  aux : List (Maybe Term) × List (Arg Term) → Arg Term → TC (List (Maybe Term) × List (Arg Term))
+  aux (ms , ips) arg′ with traverse-m-arg (inst-term ms) arg′
   ... | nothing = typeError [ strErr "aux" ]
-  ... | just ip = newMetaArg ip >>= (λ m → return ((m ∷ ms) , ips ∷ʳ ip))
+  ... | just iarg with iarg
+  ... | (arg (arg-info v r) x) with v
+  ... | visible = return ((nothing ∷ ms) , ips ∷ʳ iarg)
+  ... | _       = newMetaArg iarg >>= (λ m → return (just m ∷ ms , ips ∷ʳ iarg))
 
 
-  inst-rule : Rule → TC Rule
+  inst-rule : Rule → TC (List (Maybe Term) × Rule)
   inst-rule r with skolem? r
-  ... | true  = return (rule true
+  ... | true  = return ([] , rule true
                               (rname r)
                               (conclusion r)
                               (filter visible? (premises r)))
   ... | false = foldlM-tc aux ([] , []) (premises r)
                 >>= λ { (ms , prems) →
-                maybe (λ ips → return (rule false (rname r)
+                maybe (λ ips → return ( ms , rule false (rname r)
                                       ips
                                       (filter visible? prems))) 
                       (typeError [ strErr "inst-rule" ])
                       (inst-term ms (conclusion r)) }
+
+  norm-rule : Rule → TC Rule
+  norm-rule r = rule (skolem? r) (rname r) <$-tc> normalise (conclusion r)
+                                           <*-tc> mapM-tc (traverse-tc-arg normalise) (premises r)
 
   ----------------------------------------------------------------------------
   -- * define simple hint databases                                       * --
@@ -149,9 +155,10 @@ module ProofSearchReflection
 
   -- search trees
   {-# NO_POSITIVITY_CHECK #-}
-  data SearchTree (A : Set) : Set where
-    leaf : A → SearchTree A
-    node : TC (List (SearchTree A)) → SearchTree A
+  data SearchTree (A B : Set) : Set where
+    succ-leaf : B → A → SearchTree A B
+    fail-leaf : B → SearchTree A B
+    node      : B -> TC (List (SearchTree A B)) → SearchTree A B
 
   data Proof : Set where
      con : (name : RuleName) (args : List Proof) → Proof
@@ -168,6 +175,7 @@ module ProofSearchReflection
       rest : Vec Proof k
       rest = Vec.drop (arity r) xs
 
+  DebugInfo = Maybe RuleName
 
   -- ----------------------------------------------------------------------------
   -- -- * define proof search function                                       * --
@@ -178,18 +186,19 @@ module ProofSearchReflection
     open IsHintDB isHintDB
 
     {-# TERMINATING #-}
-    solve : Term → HintDB → SearchTree Proof
-    solve g = solveAcc (1 , g ∷ [] , Vec.head)
+    solve : Term → HintDB → SearchTree Proof DebugInfo
+    solve g db = solveAcc (1 , g ∷ [] , Vec.head) nothing db
       where
-        solveAcc : Proof′ → HintDB → SearchTree Proof
-        solveAcc (0     ,     [] , p) _  = leaf (p [])
-        solveAcc (suc k , g ∷ gs , p) db = node (mapM-tc step (getHints db))
+        solveAcc : Proof′ → DebugInfo → HintDB → SearchTree Proof DebugInfo
+        solveAcc (0     ,     [] , p) di _  = succ-leaf di (p [])
+        solveAcc (suc k , g ∷ gs , p) di db = node di (mapM-tc step (getHints db))
           where
-            step : Hint → TC (SearchTree (Proof))
+            step : Hint → TC (SearchTree Proof DebugInfo)
             step h = catchTC (inst-rule (getRule h)
-                              >>= λ ir → unify g (conclusion ir)
-                              >>= λ _  → return (solveAcc (prf ir) db))
-                             (return (node (return [])))
+                              >>= λ ir → unify′ g (conclusion (proj₂ ir))
+                              >>= λ _   → norm-rule (proj₂ ir)
+                              >>= λ ir  → return (solveAcc (prf ir) (just (rname (getRule h)) )db))
+                             (return (fail-leaf (just (rname (getRule h))) ))
               where
                 prf : Rule → Proof′
                 prf r = (length (premises r) + k) , prm′ , (p ∘ con′ r)
@@ -202,10 +211,27 @@ module ProofSearchReflection
   -- * define various search strategies                                   * --
   ----------------------------------------------------------------------------
 
-  Strategy = ∀ {A : Set} → (depth : ℕ) → SearchTree A -> TC (List A)
+  -- debug information collected by the proof search
+  record Debug (B : Set) : Set where
+    constructor debug
+    field
+      index  : List ℕ
+      depth  : ℕ
+      fail?  : Bool
+      info   : B
 
-  dfs : ∀ {A : Set} → (depth : ℕ) → SearchTree A -> TC (List A)
-  dfs  zero    _        = return []
-  dfs (suc k) (leaf x)  = return (x ∷ [])
-  dfs (suc k) (node xs) =
-    xs >>= λ xs′ → List.concat <$-tc> sequence-tc (List.map (dfs k) xs′)
+  Strategy : Set₁
+  Strategy = ∀ {A B : Set} → (depth : ℕ) → SearchTree A B -> TC (List A × List (Debug B))
+
+  dfs′ : ∀ {A B : Set} → (depth : ℕ) → (ℕ × List ℕ) → SearchTree A B -> TC (List A × List (Debug B))
+  dfs′  zero   _  _                    = return ([] , [])
+  dfs′ (suc k) (n , p) (fail-leaf l)   = return ([]    , [ debug (suc n ∷ p) (suc k) true l  ])
+  dfs′ (suc k) (n , p) (succ-leaf l x) = return ([ x ] , [ debug (suc n ∷ p) (suc k) false l ])
+  dfs′ (suc k) (n , p) (node l xs) = xs >>=
+    foldlM-tc  (λ {( m , ( ys , zs )) x → caseM dfs′ k (m , suc n ∷ p) x of λ
+                                            { (y , z) → return (suc m , (ys ∷ʳ y , zs ∷ʳ z)) }})
+               (0 , ([] , []))
+     >>= λ { ( _ , a , b) → return (concat a , (debug (suc n ∷ p) (suc k) false l) ∷ concat b) }
+
+  dfs : Strategy
+  dfs d s = dfs′ d (0 , []) s

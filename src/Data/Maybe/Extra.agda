@@ -25,3 +25,9 @@ traverse-m-arg : ∀ {A B : Set} → (A → Maybe B) → Arg A → Maybe (Arg B)
 traverse-m-arg f (arg i x) with f x
 ... | just x′ = just (arg i x′)
 ... | nothing = nothing
+
+
+catMaybes : ∀ {A : Set} → List (Maybe A) → List A
+catMaybes [] = []
+catMaybes (just x ∷ l)  = x ∷ catMaybes l
+catMaybes (nothing ∷ l) = catMaybes l

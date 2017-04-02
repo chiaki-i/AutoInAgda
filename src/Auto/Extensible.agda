@@ -23,38 +23,35 @@ open IsHintDB     instHintDB public
 open PsExtensible instHintDB public
 open Auto.Core               public using (dfs)
 
--- private
-  -- open Debug
+private
+  open Debug
 
-  -- -- show debuging information
-  -- showDebug : Debug (Maybe RuleName) → String
-  -- showDebug d =
-  --   maybe′  (λ rn → foldr _++_ "" ((foldr _++_ "" ∘ intersperse "." ∘ map showNat ∘ reverse $ (index d))
-  --                                 ∷ " depth="  ∷ showNat (depth d)
-  --                                 ∷ " " ∷ showRuleName rn
-  --                                 ∷ " " ∷ [ if (fail? d) then "×" else "✓" ])) "" (info d)
-  --     where
-  --       showRuleName : RuleName → String
-  --       showRuleName (name x) = fromList ∘ reverse ∘ takeWhile (not ∘ (_== '.'))
-  --                                        ∘ reverse ∘ toList $ showName x
-  --       showRuleName (var x)  = "var" ++ " " ++ showNat x
+  -- show debuging information
+  showDebug : Debug (Maybe RuleName) → String
+  showDebug d =
+    maybe′  (λ rn → foldr _++_ "" ((foldr _++_ "" ∘ intersperse "." ∘ map showNat ∘ reverse $ (index d))
+                                  ∷ " depth="  ∷ showNat (depth d)
+                                  ∷ " " ∷ showRuleName rn
+                                  ∷ " " ∷ [ if (fail? d) then "×" else "✓" ])) "" (info d)
+      where
+        showRuleName : RuleName → String
+        showRuleName (name x) = fromList ∘ reverse ∘ takeWhile (not ∘ (_== '.'))
+                                         ∘ reverse ∘ toList $ showName x
+        showRuleName (var x)  = "var" ++ " " ++ showNat x
 
 m-t : ∀ {A : Set} → Maybe (TC A) → TC (Maybe A)
 m-t (just x) = just <$-tc> x
 m-t nothing  = return nothing
 
-t-m : ∀ {A : Set} → TC (Maybe A) → Maybe (TC A)
-t-m t = {!!}
 -- auto
-auto : Strategy → ℕ → HintDB → Type → Ctx → TC (Maybe Term)
+auto : Strategy → ℕ → HintDB → Type → Ctx → TC (String × Maybe Term)
 auto search depth db type ctx
   with agda2goal×premises type
 ... | (g , args)
   with context2premises (length args) ctx
-... | ctxs
-  with search (suc depth) (solve g (fromRules ctxs ∙ (fromRules args ∙ db)))
-... | p = (safe-head <$-tc> p) >>= m-t ∘ (reify (length args) <$-m>_)  -- ([] , d)    =  ? -- just ((unlines ∘ map showDebug) d , nothing)
--- ... | (p ∷ _ , d) =  ? -- just ((unlines ∘ map showDebug) d , just (reify (length args) p))
+... | ctxs = caseM search (suc depth) (solve g (fromRules ctxs ∙ (fromRules args ∙ db))) of λ
+               { ([] , d)    → return ((unlines ∘ map showDebug) d , nothing)
+               ; (p ∷ _ , d) → reify (length args) p >>= λ t → return ((unlines ∘ map showDebug) d , just t)}
 
 
 -- HintDB

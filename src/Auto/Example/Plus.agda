@@ -27,11 +27,11 @@ s-Plus : ∀ n m r → n +ℕ m ≡ r → n + m ≡ r
 s-Plus .0 m .m plusZ = refl
 s-Plus .(suc _) m .(suc _) (plusS p) = cong suc (s-Plus _ _ _ p)
 
-plus-5+3=8 : 5 +ℕ 3 ≡ 8
+plus-5+3=8 : ∀ {n} → 0 +ℕ n ≡ n
 plus-5+3=8 = apply (auto 10 Plus-HintDB)
 
-plus-5+1=6 : 10 +ℕ 1 ≡ 11
-plus-5+1=6 = apply (auto 15 Plus-HintDB)
+plus-5+1=6 : 16 +ℕ 0 ≡ 16
+plus-5+1=6 = apply (auto 20 Plus-HintDB)
 
 plus-0+1=1 : 1 +ℕ 1 ≡ 2
 plus-0+1=1 with plusZ {1}

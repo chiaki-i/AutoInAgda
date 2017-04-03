@@ -32,18 +32,25 @@ module Auto.Example.Even where
   rules = ε << isEven0
             << isEven+2
             << even+
+            -- << isEven-2
 
-  test₁ : Even 4
-  test₁ = apply (auto 4 rules)
+  test1 : Even 4
+  test1 = apply (auto 6 rules)
 
-  test2 : ∀ {n} → Even n → Even (n + 2)
-  test2 e = apply (auto 4 rules)
+  test₂ : Even 100
+  test₂ = apply (auto 100 rules)
+
+  test2 : ∀ {n} → Even n → Even (n + 4)
+  test2 e = apply (auto 8 rules)
+
+  test2′ : ∀ {n} → Even n → Even (2 + n)
+  test2′ e = apply (auto 6 rules)
 
   test₃ : ∀ {n} → Even n → Even (4 + n)
-  test₃ p = apply (auto 4 rules)
+  test₃ = apply (auto 6 rules)
 
-  test₄ : ∀ {n} → Even n → Even (n + 16)
-  test₄ = apply (auto 20 rules)
+  test₄ : ∀ {n} → Even n → Even (n + 200)
+  test₄ e = apply (auto 200 rules)
 
   -- attempting to prove an impossible goal (e.g. evenness of n + 3
   -- for all n) will result in searchSpaceExhausted

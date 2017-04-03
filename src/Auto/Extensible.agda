@@ -44,12 +44,12 @@ m-t (just x) = just <$-tc> x
 m-t nothing  = return nothing
 
 -- auto
-auto : Strategy → ℕ → HintDB → TelView → TC (String × Maybe Term)
-auto search depth db tv
+auto : Strategy → ℕ → HintDB → TelView × ℕ → TC (String × Maybe Term)
+auto search depth db (tv , n)
   with agda2goal×premises tv
 ... | (g , args) = caseM search (suc depth) (solve g (fromRules args ∙ db)) of λ
                      { ([] , d)    → return ((unlines ∘ map showDebug) d , nothing)
-                     ; (p ∷ _ , d) → reify (length args) p >>= λ t → return ((unlines ∘ map showDebug) d , just t)}
+                     ; (p ∷ _ , d) → reify n p >>= λ t → return ((unlines ∘ map showDebug) d , just t)}
 
 
 -- HintDB

@@ -1,5 +1,5 @@
 open import Function     using (const; id; _∘_)
-open import Auto.Core    using (IsHintDB; simpleHintDB; Rules; Rule; TelView; toTelView )
+open import Auto.Core    using (IsHintDB; simpleHintDB; Rules; Rule; TelView; toTelView; Ctx )
 open import Data.List    using ([]; [_]; _++_; _∷_; List; downFrom; map; reverse; length; foldl; foldr)
 open import Data.Nat     using (ℕ; suc)
 open import Data.Product using (_,_; _×_; proj₁; proj₂)
@@ -26,29 +26,31 @@ private
   searchSpaceExhaustedError : ∀ {A : Set} → TC A
   searchSpaceExhaustedError = typeError (assembleError [ strErr "Error: Search space exhausted, solution not found." ])
 
-  Auto = TelView → TC (String × Maybe Term)
+  Auto = TelView × ℕ → TC (String × Maybe Term)
 
-  showInfo : Auto → Term → TelView → TC ⊤
-  showInfo a h tv = caseM a tv of λ
+  showInfo : Auto → Term × Ctx → TelView × ℕ → TC ⊤
+  showInfo a (h , c) tv = caseM a tv of λ
     { (d , just x ) → typeError (assembleError (strErr "Success Solution found. The trace generated is:" ∷
                                                 strErr d ∷ []))
     ; (d , nothing) → typeError (assembleError (strErr "Error: Solution not found. The trace generated is:" ∷
                                                 strErr d ∷ []))}
 
-  printTerm : Auto → Term → TelView → TC ⊤
-  printTerm a h tv = caseM a tv of λ
+  printTerm : Auto → Term × Ctx → TelView × ℕ → TC ⊤
+  printTerm a (h , c)  tv = caseM a tv of λ
     { (_ , nothing)  → searchSpaceExhaustedError
     ; (_ , just t)   → typeError (assembleError (strErr "Success: The Term found by auto is:\n" ∷ termErr t ∷ []))}
 
-  applyTerm : Auto → Term → TelView → TC ⊤
-  applyTerm a h tv = caseM a tv of λ
+  applyTerm : Auto → Term × Ctx → TelView × ℕ → TC ⊤
+  applyTerm a (h , c) tv = caseM a tv of λ
     { (_ , nothing)   → searchSpaceExhaustedError
-    ; (_ , just term) → unify h term}
+    ; (_ , just term) → inContext (reverse c) (unify h term)}
 
 
-  run : Auto → (Auto → Term → TelView → TC ⊤) → Term → TC ⊤
-  run a r hole = do tv ← toTelView hole
-                 -| inContext (proj₁ tv) (r a hole tv)
+  run : Auto → (Auto → Term × Ctx → TelView × ℕ → TC ⊤) → Term → TC ⊤
+  run a r hole = do t  ← inferType hole
+                 -| c  ← getContext
+                 -| caseM toTelView hole of λ
+                      { (tv , n , cc ) → inContext cc (r a (hole , c) (tv , n))}
 
 macro
   -- -- show debugging information.

@@ -21,7 +21,7 @@ module Auto.Core where
     var   : ℕ    → RuleName
 
   -- -- now we can load the definitions from proof search
-  open import ProofSearchReflection RuleName myunify2
+  open import ProofSearchReflection RuleName myunify
     as PS public renaming (module Extensible to PsExtensible)
 
   -- convert an Agda name to a rule-term.

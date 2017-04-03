@@ -34,5 +34,5 @@ plus-5+1=6 : 16 +ℕ 0 ≡ 16
 plus-5+1=6 = apply (auto 20 Plus-HintDB)
 
 plus-0+1=1 : 1 +ℕ 1 ≡ 2
-plus-0+1=1 with plusZ {1}
-... | pz = apply (auto 2 (ε << plusS))
+plus-0+1=1 with plusZ
+... | _ = apply (auto 2 (ε << plusS))

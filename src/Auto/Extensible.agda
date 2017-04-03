@@ -1,20 +1,5 @@
 open import Auto.Core
-open import Function      using (_∘_; _$_)
-open import Data.List     using (_∷_; []; [_]; List; length; takeWhile; reverse; map; foldr; intersperse)
-open import Data.Nat      using (ℕ; zero; suc; pred; _+_)
-open import Data.Nat.Show renaming (show to showNat)
-open import Data.Product  using (∃; _,_; _×_)
-open import Data.Unit     using (⊤)
-open import Data.String   using (String; _++_; toList; fromList; unlines)
-open import Data.Char     using (_==_)
-open import Data.Bool     using (Bool; true; false; not; if_then_else_)
-open import Data.Maybe    using (Maybe; just; nothing; maybe′)
-open import Reflection    using (Type; Term; Arg; Name; TC; quoteTC; getType; showName)
-                          renaming (unify to unifyTC)
-
-open import Data.Maybe.Extra
-open import Data.TC.Extra
-open import Data.List.Extra
+open import Prelude
 
 module Auto.Extensible (instHintDB : IsHintDB) where
 
@@ -29,19 +14,15 @@ private
   -- show debuging information
   showDebug : Debug (Maybe RuleName) → String
   showDebug d =
-    maybe′  (λ rn → foldr _++_ "" ((foldr _++_ "" ∘ intersperse "." ∘ map showNat ∘ reverse $ (index d))
+    maybe  (λ rn → foldr _++_ "" ((foldr _++_ "" ∘ intersperse "." ∘ map show ∘ reverse $ (index d))
                                   ∷ " depth="  ∷ showNat (depth d)
                                   ∷ " " ∷ showRuleName rn
                                   ∷ " " ∷ [ if (fail? d) then "×" else "✓" ])) "" (info d)
       where
         showRuleName : RuleName → String
-        showRuleName (name x) = fromList ∘ reverse ∘ takeWhile (not ∘ (_== '.'))
-                                         ∘ reverse ∘ toList $ showName x
-        showRuleName (var x ) = "var" ++ " " ++ showNat x
-
-m-t : ∀ {A : Set} → Maybe (TC A) → TC (Maybe A)
-m-t (just x) = just <$-tc> x
-m-t nothing  = return nothing
+        showRuleName (name x) = packString ∘ reverse ∘ takeWhile (not ∘ (_== '.'))
+                                         ∘ reverse ∘ unpackString $ show x
+        showRuleName (var x ) = "var" ++ " " ++ show x
 
 -- auto
 auto : Strategy → ℕ → HintDB → TelView × ℕ → TC (String × Maybe Term)

@@ -1,13 +1,6 @@
-open import Function     using (const; id; _∘_)
 open import Auto.Core    using (IsHintDB; simpleHintDB; Rules; Rule; TelView; toTelView; Ctx )
-open import Data.List    using ([]; [_]; _++_; _∷_; List; downFrom; map; reverse; length; foldl; foldr)
-open import Data.Nat     using (ℕ; suc)
-open import Data.Product using (_,_; _×_; proj₁; proj₂)
-open import Data.Unit    using (⊤)
-open import Data.Maybe   using (Maybe; just; nothing)
-open import Data.String  using (String)
-open import Reflection
-open import Data.TC.Extra
+open import Prelude      renaming (print to printIO)
+open import Builtin.Reflection
 
 module Auto where
 
@@ -26,27 +19,27 @@ private
   searchSpaceExhaustedError : ∀ {A : Set} → TC A
   searchSpaceExhaustedError = typeError (assembleError [ strErr "Error: Search space exhausted, solution not found." ])
 
-  Auto = TelView × ℕ → TC (String × Maybe Term)
+  Auto = TelView × Nat → TC (String × Maybe Term)
 
-  showInfo : Auto → Term × Ctx → TelView × ℕ → TC ⊤
+  showInfo : Auto → Term × Ctx → TelView × Nat → TC ⊤
   showInfo a (h , c) tv = caseM a tv of λ
     { (d , just x ) → typeError (assembleError (strErr "Success Solution found. The trace generated is:" ∷
                                                 strErr d ∷ []))
     ; (d , nothing) → typeError (assembleError (strErr "Error: Solution not found. The trace generated is:" ∷
                                                 strErr d ∷ []))}
 
-  printTerm : Auto → Term × Ctx → TelView × ℕ → TC ⊤
+  printTerm : Auto → Term × Ctx → TelView × Nat → TC ⊤
   printTerm a (h , c)  tv = caseM a tv of λ
     { (_ , nothing)  → searchSpaceExhaustedError
     ; (_ , just t)   → typeError (assembleError (strErr "Success: The Term found by auto is:\n" ∷ termErr t ∷ []))}
 
-  applyTerm : Auto → Term × Ctx → TelView × ℕ → TC ⊤
+  applyTerm : Auto → Term × Ctx → TelView × Nat → TC ⊤
   applyTerm a (h , c) tv = caseM a tv of λ
     { (_ , nothing)   → searchSpaceExhaustedError
     ; (_ , just term) → inContext (reverse c) (unify h term)}
 
 
-  run : Auto → (Auto → Term × Ctx → TelView × ℕ → TC ⊤) → Term → TC ⊤
+  run : Auto → (Auto → Term × Ctx → TelView × Nat → TC ⊤) → Term → TC ⊤
   run a r hole = do t  ← inferType hole
                  -| c  ← getContext
                  -| caseM toTelView hole of λ

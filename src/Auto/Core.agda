@@ -1,15 +1,18 @@
 open import Function                   using (_∘_; id; flip)
-open import Data.Nat     as Nat        using (ℕ; suc; zero; pred)
+open import Data.Nat     as Nat        using (ℕ; suc; zero; pred; _+_)
 open import Data.List    as List       using (List; []; _∷_; [_]; concatMap; _++_; length; map)
-open import Data.Product as Prod       using (_×_; _,_)
 open import Data.Maybe   as Maybe      using (Maybe; just; nothing; maybe)
 open import Data.Maybe.Extra           using (_<$-m>_)
 open import Data.Bool                  using (true; false)
 open import Reflection
 open import Data.TC.Extra              using (return; _>>=_) 
 open import Unification
+open import Context
+open import Data.Product using (_×_; _,_; proj₁; proj₂)
 
 module Auto.Core where
+
+  open import Context public
 
   -- define rule names for the proof terms/rules that our proof search will
   -- return/use; we'll use standard Agda names, together with rule-variables.
@@ -21,13 +24,6 @@ module Auto.Core where
   open import ProofSearchReflection RuleName myunify2
     as PS public renaming (module Extensible to PsExtensible)
 
-
-  -- return a view of a pi type
-  telView : Type → List (Arg Type) × Type
-  telView (pi a (abs _ b)) with telView b
-  ... | (l , t) = a ∷ l , t
-  telView a = [] , a
-
   -- convert an Agda name to a rule-term.
   name2rule : Name → Type → Rule
   name2rule nm t with telView t
@@ -38,23 +34,13 @@ module Auto.Core where
   -- term of the type `A → B` this function will generate a goal of
   -- type `B` and a premise of type `A`.
   -- in case the argument is not visible we just ignore it.
-  agda2goal×premises : Type → Term × Rules
-  agda2goal×premises t with telView t
-  ... | prems , goal = goal , toPremises 0 prems
+  agda2goal×premises : TelView → Term × Rules
+  agda2goal×premises (prems , goal) = goal , toPremises 0 (List.reverse prems)
     where
       toPremises : ℕ → List (Arg Term) → Rules
       toPremises i [] = []
-      toPremises i (arg (arg-info visible r) t ∷ ts) = rule true (var i) t [] ∷ toPremises (pred i) ts
-      toPremises i (arg (arg-info _′      r) _ ∷ ts) = toPremises i ts 
-
-  -- A context is a deBruijn indexed list of the types of the variables.
-  Ctx = List Type
-
-  -- convert an Agda context to a `HintDB`.
-  context2premises : (index : ℕ) → Ctx → Rules
-  context2premises i []       = []
-  context2premises i (t ∷ ts) with telView t
-  ... | prems , goal = rule true (var i) goal prems ∷ context2premises (suc i) ts
+      toPremises i (arg (arg-info visible r) t ∷ ts) = rule true (var i) t [] ∷ toPremises (suc i) ts
+      toPremises i (arg (arg-info _′      r) _ ∷ ts) = toPremises (suc i) ts
 
 
   -- function which reifies untyped proof terms (from the

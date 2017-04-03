@@ -37,21 +37,19 @@ private
         showRuleName : RuleName → String
         showRuleName (name x) = fromList ∘ reverse ∘ takeWhile (not ∘ (_== '.'))
                                          ∘ reverse ∘ toList $ showName x
-        showRuleName (var x)  = "var" ++ " " ++ showNat x
+        showRuleName (var x ) = "var" ++ " " ++ showNat x
 
 m-t : ∀ {A : Set} → Maybe (TC A) → TC (Maybe A)
 m-t (just x) = just <$-tc> x
 m-t nothing  = return nothing
 
 -- auto
-auto : Strategy → ℕ → HintDB → Type → Ctx → TC (String × Maybe Term)
-auto search depth db type ctx
-  with agda2goal×premises type
-... | (g , args)
-  with context2premises (length args) ctx
-... | ctxs = caseM search (suc depth) (solve g (fromRules ctxs ∙ (fromRules args ∙ db))) of λ
-               { ([] , d)    → return ((unlines ∘ map showDebug) d , nothing)
-               ; (p ∷ _ , d) → reify (length args) p >>= λ t → return ((unlines ∘ map showDebug) d , just t)}
+auto : Strategy → ℕ → HintDB → TelView → TC (String × Maybe Term)
+auto search depth db tv
+  with agda2goal×premises tv
+... | (g , args) = caseM search (suc depth) (solve g (fromRules args ∙ db)) of λ
+                     { ([] , d)    → return ((unlines ∘ map showDebug) d , nothing)
+                     ; (p ∷ _ , d) → reify (length args) p >>= λ t → return ((unlines ∘ map showDebug) d , just t)}
 
 
 -- HintDB

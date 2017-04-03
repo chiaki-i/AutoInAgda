@@ -1,5 +1,5 @@
 open import Reflection  using (TC; bindTC; returnTC; Arg; arg)
-open import Function    using (_∘_)
+open import Function    using (_∘_; case_of_)
 open import Data.List   using (List; _∷_; []; foldl)
 
 module Data.TC.Extra where
@@ -35,9 +35,6 @@ sequence-tc : ∀ {A : Set} → List (TC A) → TC (List A)
 sequence-tc []       = return []
 sequence-tc (x ∷ xs) = x >>= λ x′ → sequence-tc xs >>= λ xs′ → return (x′ ∷ xs′)
 
- 
-case_of_ : ∀ {a b} {A : Set a} {B : Set b} → A → (A → B) → B
-case x of f = f x
 
 infix -10 do_
 do_ : ∀ {a} {A : Set a} → A → A

@@ -47,8 +47,7 @@ private
 
 
   run : Auto → (Auto → Term × Ctx → TelView × ℕ → TC ⊤) → Term → TC ⊤
-  run a r hole = do t  ← inferType hole
-                 -| c  ← getContext
+  run a r hole = do c  ← getContext
                  -| caseM toTelView hole of λ
                       { (tv , n , cc ) → inContext cc (r a (hole , c) (tv , n))}
 

@@ -24,8 +24,10 @@ myunify t s | (var x args) | (var x′ args′) with x Nat.≟ x′
 ... | _      = notUnify
 myunify t s | (con c args) | (con c′ args′) with c ≟-Name c′
 ... | yes _  =  sequence-tc (zipWith (lift-unify myunify) args args′) >> return tt
-... | _      = notUnify
-myunify t s | con c args  | lit  l        = unify t s 
+... | _      =  notUnify
+myunify t s | con c args   | lit  l       = unify t s 
+myunify t s | con c args   | meta m args′ = unify t s 
+myunify t s | meta m args  | con c args′ = unify t s 
 myunify t s | lit l       | con c args   = unify t s 
 myunify t s | (def f args) | (def f′ args′) with f ≟-Name f′
 ... | yes _  =  sequence-tc (zipWith (lift-unify myunify) args args′) >> return tt

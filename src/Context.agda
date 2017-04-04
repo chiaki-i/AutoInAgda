@@ -16,7 +16,7 @@ module Context where
   private 
     mkContext : Ctx → TC (List (Arg Type))
     mkContext c =
-      proj₂ <$-tc> foldlM-tc (λ {(i , xs) (arg info t) → do t ← inferType (var i [])
+      proj₂ <$-tc> foldlM-tc (λ {(i , xs) (arg info t) → do t ← inferType (var i []) >>= normalise
                                                         -| return ((suc i) , (arg info t ∷ xs))})
                   (0 , []) c
 

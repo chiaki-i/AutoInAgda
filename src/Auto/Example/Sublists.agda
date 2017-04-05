@@ -34,7 +34,7 @@ hintdb₁ = ε << drop
 
 lemma₁ : {ws xs ys zs : List ℕ}
        → ws ⊆ 1 ∷ xs → xs ⊆ ys → ys ⊆ zs → ws ⊆ 1 ∷ 2 ∷ zs
-lemma₁ = apply (auto 7 hintdb₁)
+lemma₁ = info (auto 20 hintdb₁)
 
 -- searchSpaceExhausted
 -- lemma₂ : {ws xs ys zs : List ℕ}

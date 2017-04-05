@@ -39,7 +39,9 @@ module Auto.Core where
     where
       toPremises : ℕ → List (Arg Term) → Rules
       toPremises i [] = []
-      toPremises i (arg (arg-info visible r) t ∷ ts) = rule true (var i) t [] ∷ toPremises (suc i) ts
+      toPremises i (arg (arg-info visible r) t ∷ ts)
+        with telView t
+      ... | (prems , goal)                           = rule true (var i) goal prems ∷ toPremises (suc i) ts
       toPremises i (arg (arg-info _′      r) _ ∷ ts) = toPremises (suc i) ts
 
 
@@ -47,7 +49,7 @@ module Auto.Core where
   -- `ProofSearch` module) to untyped Agda terms.
   mutual
     proof2AgTerm : Proof → TC Term
-    proof2AgTerm (con (var i) ps)  = return (var i [])
+    proof2AgTerm (con (var i) ps)  = children2AgTerms ps >>= (return ∘ var i)
     proof2AgTerm (con (name n) ps) =
       getDefinition n >>=
         λ { (function cs)       → children2AgTerms ps >>= (return ∘ def n)

@@ -1,5 +1,5 @@
 open import Data.List      using (List; _∷_; []; map; length; foldr; _++_; reverse)
-open import Data.Nat       using (ℕ ; suc; zero; _+_)
+open import Data.Nat       using (ℕ ; suc; zero; _+_; pred)
 open import Function       using (_∘′_; case_of_)
 open import Data.Product   using (_×_; _,_; proj₁; proj₂)
 
@@ -33,7 +33,7 @@ module Context where
       app s (def f args) = def f (map (appArg s) args) 
       app s (lam v (abs s₁ x)) = lam v (abs s₁ (app s x))
       app s (pat-lam cs args) = pat-lam cs args
-      app s (pi a b)  = pi a b
+      app s (pi a (abs s₁ x)) = pi (appArg s a) (abs s₁ (app (pred ∘′ s) x))
       app s (sort s₁) = sort s₁
       app s (lit l)   = lit l
       app s (meta x args) = meta x (map (appArg s) args)
@@ -47,7 +47,7 @@ module Context where
 
   toTelView : (hole : Term) → TC (TelView × ℕ × Ctx)
   toTelView hole =
-    do type ← inferType hole
+    do type ← inferType hole >>= normalise
     -| c    ← getContext
     -| ctx  ← mkContext c
     -| case telView type of λ

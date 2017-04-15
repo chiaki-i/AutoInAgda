@@ -1,4 +1,5 @@
 open import Prelude
+open import Prelude.Extra
 open import Builtin.Reflection
 open import Container.Traversable
 
@@ -7,8 +8,6 @@ module ProofSearchReflection
   (unify′    : Term → Term → TC ⊤)
   where
 
-  _∷ʳ_ : ∀ {A : Set} → List A → A → List A
-  xs ∷ʳ x = xs ++ [ x ]
   ----------------------------------------------------------------------------
   -- * define rules and utility functions                                 * --
   ----------------------------------------------------------------------------
@@ -101,16 +100,12 @@ module ProofSearchReflection
                               (rname r)
                               (conclusion r)
                               (filter visible? (premises r)))
-  ... | false = foldlM aux ([] , []) (premises r)
-                >>= λ { (ms , prems) →
-                maybe (λ ips → return ( ms , rule false (rname r)
-                                      ips
-                                      (filter visible? prems))) 
-                      (typeError [ strErr "inst-rule" ])
-                      (inst-term ms (conclusion r)) }
-          where
-            foldlM : ∀ {A B : Set} → (B → A → TC B) → B → List A → TC B
-            foldlM f b xs = foldl (λ tcb a → tcb >>= (λ b → f b a)) (return b) xs
+  ... | false = caseM foldlM aux ([] , []) (premises r) of λ
+                      { (ms , prems) → maybe (typeError [ strErr "inst-rule" ])
+                                             (λ ips → return ( ms , rule false (rname r)
+                                             ips
+                                             (filter visible? prems))) 
+                         (inst-term ms (conclusion r)) }
 
   norm-rule : Rule → TC Rule
   norm-rule r = rule (skolem? r) (rname r) <$> normalise (conclusion r)
@@ -157,9 +152,9 @@ module ProofSearchReflection
   con′ {k} r xs = head ∷ rest
     where
       head : Proof
-      head = con (rname r) ? -- (vecToList $ Vec.take (arity r) xs)
+      head = con (rname r) (vecToList (takeVec (arity r) xs))
       rest : Vec Proof k
-      rest = ? -- Vec.drop (arity r) xs
+      rest = dropVec (arity r) xs
 
   DebugInfo = Maybe RuleName
 
@@ -173,17 +168,17 @@ module ProofSearchReflection
 
     {-# TERMINATING #-}
     solve : Term → HintDB → SearchTree Proof DebugInfo
-    solve g db = solveAcc (1 , g ∷ [] , ?) nothing db
+    solve g db = solveAcc (1 , g ∷ [] , headVec) nothing db
       where
         solveAcc : Proof′ → DebugInfo → HintDB → SearchTree Proof DebugInfo
         solveAcc (0     ,     [] , p) di _  = succ-leaf di (p [])
         solveAcc (suc k , g ∷ gs , p) di db = node di (mapM step (getHints db))
           where
             step : Hint → TC (SearchTree Proof DebugInfo)
-            step h = catchTC (inst-rule (getRule h)
-                              >>= λ ir → unify′ g (conclusion (snd ir))
-                              >>= λ _   → norm-rule (snd ir)
-                              >>= λ ir  → return (solveAcc (prf ir) (just (rname (getRule h)) )db))
+            step h = catchTC (do ir  ← inst-rule (getRule h)
+                              -| unify′ g (conclusion (snd ir))
+                              ~| nir ← norm-rule (snd ir)
+                              -| return (solveAcc (prf nir) (just (rname (getRule h)) )db))
                              (return (fail-leaf (just (rname (getRule h))) ))
               where
                 prf : Rule → Proof′
@@ -218,9 +213,6 @@ module ProofSearchReflection
                                        { (y , z) → return (suc m , (ys ∷ʳ y , zs ∷ʳ z)) }})
                (0 , ([] , []))
      >>= λ { ( _ , a , b) → return (concat a , (debug (suc n ∷ p) (suc k) false l) ∷ concat b) }
-     where
-       foldlM : ∀ {A B : Set} → (B → A → TC B) → B → List A → TC B
-       foldlM f b xs = foldl (λ tcb a → tcb >>= (λ b → f b a)) (return b) xs
 
   dfs : Strategy
   dfs d s = dfs′ d (0 , []) s

@@ -1,6 +1,7 @@
 open import Builtin.Reflection
 open import Prelude 
 open import Container.Traversable
+open import Tactic.Reflection.Equality
 
 module Unification where
 

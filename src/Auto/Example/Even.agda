@@ -1,20 +1,9 @@
 open import Auto
-open import Data.Nat using (ℕ; suc; zero; _+_)
-open import Relation.Binary.PropositionalEquality as PropEq using (_≡_; refl; cong; sym)
+open import Prelude
 
 module Auto.Example.Even where
 
-  private
-    n+0≡n : ∀ n → n + 0 ≡ n
-    n+0≡n zero    = refl
-    n+0≡n (suc n) = cong suc (n+0≡n n)
-
-    m+1+n≡1+m+n : ∀ m n → m + suc n ≡ suc (m + n)
-    m+1+n≡1+m+n zero    n = refl
-    m+1+n≡1+m+n (suc m) n = cong suc (m+1+n≡1+m+n m n)
-
-
-  data Even  : ℕ →  Set where
+  data Even  : Nat →  Set where
     isEven0  : Even 0
     isEven+2 : ∀ {n} → Even n → Even (suc (suc n))
 
@@ -35,7 +24,7 @@ module Auto.Example.Even where
             -- << isEven-2
 
   test1 : Even 4
-  test1 = apply (auto 6 rules)
+  test1 = debug (auto 6 rules)
 
   test₂ : Even 100
   test₂ = apply (auto 100 rules)

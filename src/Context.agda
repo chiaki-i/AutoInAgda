@@ -13,7 +13,7 @@ module Context where
 
   Ctx = List (Arg Type)
 
-  private 
+  private
     mkContext : Ctx → TC (List (Arg Type))
     mkContext c =
       proj₂ <$-tc> foldlM-tc (λ {(i , xs) (arg info t) → do t ← inferType (var i []) >>= normalise

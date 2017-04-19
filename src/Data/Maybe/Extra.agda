@@ -31,3 +31,7 @@ catMaybes : ∀ {A : Set} → List (Maybe A) → List A
 catMaybes [] = []
 catMaybes (just x ∷ l)  = x ∷ catMaybes l
 catMaybes (nothing ∷ l) = catMaybes l
+
+join-m : ∀ {A : Set} → Maybe (Maybe A) → Maybe A
+join-m (just m) = m
+join-m nothing  = nothing

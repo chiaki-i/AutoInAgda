@@ -9,7 +9,7 @@ open import Data.String   using (String; _++_; toList; fromList; unlines)
 open import Data.Char     using (_==_)
 open import Data.Bool     using (Bool; true; false; not; if_then_else_)
 open import Data.Maybe    using (Maybe; just; nothing; maybe′)
-open import Reflection    using (Type; Term; Arg; Name; TC; quoteTC; getType; showName)
+open import Reflection    using (data-type; strErr; Type; Term; Arg; Name; TC; quoteTC; getType; showName; typeError; termErr; getDefinition )
                           renaming (unify to unifyTC)
 
 open import Data.Maybe.Extra
@@ -18,49 +18,64 @@ open import Data.List.Extra
 
 module Auto.Extensible (instHintDB : IsHintDB) where
 
+  open IsHintDB     instHintDB public
+  open PsExtensible instHintDB public
+  open Auto.Core               public using (dfs)
 
-open IsHintDB     instHintDB public
-open PsExtensible instHintDB public
-open Auto.Core               public using (dfs)
+  private
+    open Debug
 
-private
-  open Debug
+    -- show debuging information
+    showDebug : Debug (Maybe RuleName) → String
+    showDebug d =
+      maybe′  (λ rn → foldr _++_ "" ((foldr _++_ "" ∘ intersperse "." ∘ map showNat ∘ reverse $ (index d))
+                                    ∷ " depth="  ∷ showNat (depth d)
+                                    ∷ " " ∷ showRuleName rn
+                                    ∷ " " ∷ [ if (fail? d) then "×" else "✓" ])) "" (info d)
+        where
+          showRuleName : RuleName → String
+          showRuleName (name x) = fromList ∘ reverse ∘ takeWhile (not ∘ (_== '.'))
+                                          ∘ reverse ∘ toList $ showName x
+          showRuleName (var x ) = "var" ++ " " ++ showNat x
 
-  -- show debuging information
-  showDebug : Debug (Maybe RuleName) → String
-  showDebug d =
-    maybe′  (λ rn → foldr _++_ "" ((foldr _++_ "" ∘ intersperse "." ∘ map showNat ∘ reverse $ (index d))
-                                  ∷ " depth="  ∷ showNat (depth d)
-                                  ∷ " " ∷ showRuleName rn
-                                  ∷ " " ∷ [ if (fail? d) then "×" else "✓" ])) "" (info d)
-      where
-        showRuleName : RuleName → String
-        showRuleName (name x) = fromList ∘ reverse ∘ takeWhile (not ∘ (_== '.'))
-                                         ∘ reverse ∘ toList $ showName x
-        showRuleName (var x ) = "var" ++ " " ++ showNat x
-
-m-t : ∀ {A : Set} → Maybe (TC A) → TC (Maybe A)
-m-t (just x) = just <$-tc> x
-m-t nothing  = return nothing
-
--- auto
-auto : Strategy → ℕ → HintDB → TelView × ℕ → TC (String × Maybe Term)
-auto search depth db (tv , n)
-  with agda2goal×premises tv
-... | (g , args) = caseM search (suc depth) (solve g (fromRules args ∙ db)) of λ
-                     { ([] , d)    → return ((unlines ∘ map showDebug) d , nothing)
-                     ; (p ∷ _ , d) → reify n p >>= λ t → return ((unlines ∘ map showDebug) d , just t)}
+  -- auto
+  auto : Strategy → ℕ → HintDB → TelView × ℕ → TC (String × Maybe Term)
+  auto search depth db (tv , n)
+    with agda2goal×premises tv
+  ... | (g , args) = caseM search (suc depth) (solve g (fromRules args ∙ db)) of λ
+                      { ([] , d)    → return ((unlines ∘ map showDebug) d , nothing)
+                      ; (p ∷ _ , d) → reify n p >>= λ t → return ((unlines ∘ map showDebug) d , just t)}
 
 
--- HintDB
-private
-  mkHintDB : HintDB → Rule → HintDB
-  mkHintDB db r = (ret r) ∙ db
+  printDB : HintDB → TelView × ℕ → Term → TC (String × Maybe Term)
+  printDB db (tv , n) h
+    with agda2goal×premises tv
+  ... | (g , args) = quoteTC (fromRules args ∙ db) >>= λ t → typeError [ termErr t ]
 
-infixl 5 _<<_
 
-macro
-  _<<_ : HintDB → Name → (Term → TC ⊤)
-  db << nm = λ h   → getType nm
-           >>= λ t → quoteTC (mkHintDB db (name2rule nm t))
-           >>= unifyTC h
+  -- HintDB
+
+  private
+
+    -- add a new hint to the HintDB
+    add-hint : HintDB → Name → TC HintDB
+    add-hint db nm = do t ← getType nm
+                    -| return (ret (name2rule nm t) ∙ db)
+
+    -- given the name of a data-type, create a HintDB with
+    -- all its constructors
+    add-constr : Name → TC HintDB
+    add-constr nm =
+      caseM getDefinition nm of λ
+        { (data-type pars cs) → foldlM-tc add-hint ε cs
+        ; _                   → typeError (strErr ("Non data-type name: " ++ showName nm) ∷ []) }
+
+
+  macro
+    _<<_ : HintDB → Name → Term → TC ⊤
+    db << nm = λ h → add-hint db nm >>= quoteTC >>= unifyTC h
+
+    constructors : Name → Term → TC ⊤
+    constructors nm = λ h → add-constr nm >>= quoteTC >>= unifyTC h
+
+  infixl 5 _<<_

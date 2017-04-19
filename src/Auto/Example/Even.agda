@@ -32,7 +32,7 @@ module Auto.Example.Even where
   test₃ e = apply (auto 8 rules)
 
   test₃′ : ∀ {n} → Even n → Even (4 + n)
-  test₃′ e = apply (auto 6 rules)
+  test₃′ e = apply (auto 5 rules)
 
   test₄ : ∀ {n} → Even n → Even (n + 200)
   test₄ e = apply (auto 200 rules)

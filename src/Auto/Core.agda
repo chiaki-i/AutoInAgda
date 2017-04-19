@@ -27,7 +27,7 @@ module Auto.Core where
   -- convert an Agda name to a rule-term.
   name2rule : Name → Type → Rule
   name2rule nm t with telView t
-  ... | prems , concl = rule false (name nm) concl prems
+  ... | prems , concl = rule (name nm) concl prems
 
   -- convert an Agda term to a goal-term, together with a `HintDB`
   -- representing the premises of the rule---this means that for a
@@ -41,8 +41,8 @@ module Auto.Core where
       toPremises i [] = []
       toPremises i (arg (arg-info visible r) t ∷ ts)
         with telView t
-      ... | (prems , goal)                           = rule true (var i) goal prems ∷ toPremises (suc i) ts
-      toPremises i (arg (arg-info _′      r) _ ∷ ts) = toPremises (suc i) ts
+      ... | (prems′ , goal)                          = rule (var i) goal prems′ ∷ toPremises (suc i) ts
+      toPremises i (arg (arg-info _       r) _ ∷ ts) = toPremises (suc i) ts
 
 
   -- function which reifies untyped proof terms (from the
@@ -68,6 +68,8 @@ module Auto.Core where
         toArg : Term → Arg Term
         toArg = arg (arg-info visible relevant)
 
+  -- introduce as many lambda abstractions on top of the
+  -- term
   intros : ℕ → Term → Term
   intros  zero   t = t
   intros (suc k) t = lam visible (abs "_" ((intros k t)))

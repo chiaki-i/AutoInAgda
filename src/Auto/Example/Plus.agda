@@ -12,8 +12,7 @@ data Plus : ℕ → ℕ → ℕ → Set where
   plusS : ∀ {n m r} → Plus n m r → Plus (suc n) m (suc r)
 
 Plus-HintDB : HintDB
-Plus-HintDB = ε << plusS
-                << plusZ
+Plus-HintDB = constructors Plus
 
 -- a handy synonym
 _+ℕ_≡_ : ℕ → ℕ → ℕ → Set

@@ -1,7 +1,7 @@
 open import Data.List as List
 open import Reflection
-open import Data.Maybe as Maybe
-open import Data.Product
+open import Data.Maybe as Maybe using (Maybe; just; nothing)
+open import Data.Product        using (_×_;_,_; proj₁; proj₂; ∃)
 open import Data.Unit
 open import Data.Nat        as Nat                using (ℕ; suc; zero; _+_)
 open import Level                                 using (_⊔_)
@@ -31,12 +31,11 @@ module ProofSearchReflection
   record Rule : Set where
     constructor rule
     field
-      skolem?     : Bool
       rname       : RuleName
       conclusion  : Term
       premises    : List (Arg Term)
 
-  open Rule using (skolem?; rname; conclusion; premises)
+  open Rule using (rname; conclusion; premises)
 
   -- alias for list of rules
   Rules : Set
@@ -83,52 +82,43 @@ module ProofSearchReflection
   unArg : ∀ {A : Set} → Arg A → A
   unArg (arg i x) = x
 
+  mapArg : ∀ {A B : Set} → (A → B) → Arg A → Arg B
+  mapArg f (arg i x) = arg i (f x)
+
+  -- instantiate a Term with a given list of terms
+  -- filling the variables.
   {-# TERMINATING #-}
-  inst-term : List (Maybe Term) → Term → Maybe Term
-  inst-term ms (var x args) with lookup ms x
-  ... | nothing = nothing
-  ... | just m  = m
-  inst-term ms (con c args)  = con c <$-m> mapM-m (traverse-m-arg (inst-term ms))
-                                           args
-  inst-term ms (def c args)  = def c <$-m> mapM-m (traverse-m-arg (inst-term ms))
-                                           args
-  inst-term ms (lam v (abs s x)) = lam v <$-m> (abs s <$-m> inst-term ms x)
-  inst-term ms (pat-lam _ _)     = nothing
-  inst-term ms (pi a (abs s x))  = pi <$-m> (traverse-m-arg (inst-term ms)) a
-                                      <*-m> (abs s <$-m> inst-term ms x)
-  inst-term ms (sort s)    = just (sort s)
-  inst-term ms (lit l)     = just (lit l)
-  inst-term ms (meta x args) = meta x <$-m> mapM-m (traverse-m-arg (inst-term ms))
-                                            args
-  inst-term ms unknown = just unknown
+  instₜ : List (Maybe Term) → Term → Term
+  instₜ m (var x args) with join-m (lookup m x)
+  ... | just t  = t
+  ... | nothing = var x args
+  instₜ m (con c args) = con c (map (mapArg (instₜ m)) args )
+  instₜ m (def f args) = def f (map (mapArg (instₜ m)) args )
+  instₜ m (lam v (abs s x)) = lam v (abs s (instₜ m x))
+  -- this case has to be work out
+  instₜ m (pat-lam cs args) = pat-lam cs args
+  instₜ m (pi a (abs s x))  = pi (mapArg (instₜ m) a) (abs s (instₜ m x))
+  instₜ m (sort s)          = sort s
+  instₜ m (lit l)           = lit l
+  instₜ m (meta x args)     = meta x ((map (mapArg (instₜ m)) args ))
+  instₜ m unknown           = unknown
 
 
   aux : List (Maybe Term) × List (Arg Term) → Arg Term → TC (List (Maybe Term) × List (Arg Term))
-  aux (ms , ips) arg′ with traverse-m-arg (inst-term ms) arg′
-  ... | nothing = typeError [ strErr "aux" ]
-  ... | just iarg with iarg
-  ... | (arg (arg-info v r) x) with v
-  ... | visible = return ((nothing ∷ ms) , ips ∷ʳ iarg)
-  ... | _       = newMetaArg iarg >>= (λ m → return (just m ∷ ms , ips ∷ʳ iarg))
+  aux (m , ips) arg′ with mapArg (instₜ m) arg′
+  ... | iarg@(arg (arg-info visible r) x) = return ((nothing ∷ m) , ips ∷ʳ iarg)
+  ... | iarg@(arg (arg-info _       r) x) = newMeta x >>= (λ t → return ((just t ∷ m) , ips ∷ʳ iarg))
 
 
-  inst-rule : Rule → TC (List (Maybe Term) × Rule)
-  inst-rule r with skolem? r
-  ... | true  = return ([] , rule true
-                              (rname r)
-                              (conclusion r)
-                              (filter visible? (premises r)))
-  ... | false = foldlM-tc aux ([] , []) (premises r)
-                >>= λ { (ms , prems) →
-                maybe (λ ips → return ( ms , rule false (rname r)
-                                      ips
-                                      (filter visible? prems))) 
-                      (typeError [ strErr "inst-rule" ])
-                      (inst-term ms (conclusion r)) }
+  instᵣ : Rule → TC (List (Maybe Term) × Rule)
+  instᵣ r = foldlM-tc aux ([] , []) (premises r)
+              >>= λ { (ms , prems) → return ( ms , rule (rname r)
+                                                   (instₜ ms (conclusion r))
+                                                   (filter visible? prems))}
 
   norm-rule : Rule → TC Rule
-  norm-rule r = rule (skolem? r) (rname r) <$-tc> normalise (conclusion r)
-                                           <*-tc> mapM-tc (traverse-tc-arg normalise) (premises r)
+  norm-rule r = rule  (rname r) <$-tc> normalise (conclusion r)
+                                <*-tc> mapM-tc (traverse-tc-arg normalise) (premises r)
 
   ----------------------------------------------------------------------------
   -- * define simple hint databases                                       * --
@@ -194,7 +184,7 @@ module ProofSearchReflection
         solveAcc (suc k , g ∷ gs , p) di db = node di (mapM-tc step (getHints db))
           where
             step : Hint → TC (SearchTree Proof DebugInfo)
-            step h = catchTC (inst-rule (getRule h)
+            step h = catchTC (instᵣ (getRule h)
                               >>= λ ir → unify′ g (conclusion (proj₂ ir))
                               >>= λ _   → norm-rule (proj₂ ir)
                               >>= λ ir  → return (solveAcc (prf ir) (just (rname (getRule h)) )db))

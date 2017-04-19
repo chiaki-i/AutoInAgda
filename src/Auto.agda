@@ -1,5 +1,5 @@
 open import Function     using (const; id; _∘_)
-open import Auto.Core    using (IsHintDB; simpleHintDB; Rules; Rule; TelView; toTelView; Ctx )
+open import Auto.Core    using (IsHintDB; simpleHintDB; Rules; Rule; TelView; toTelView; Ctx; agda2goal×premises )
 open import Data.List    using ([]; [_]; _++_; _∷_; List; downFrom; map; reverse; length; foldl; foldr)
 open import Data.Nat     using (ℕ; suc)
 open import Data.Product using (_,_; _×_; proj₁; proj₂)
@@ -11,55 +11,56 @@ open import Data.TC.Extra
 
 module Auto where
 
-open import Auto.Extensible simpleHintDB public using (HintDB; _<<_; ε; dfs) renaming (auto to auto′)
+  open import Auto.Extensible simpleHintDB public using (_∙_; HintDB; _<<_; ε; dfs; printDB; constructors; fromRules) renaming (auto to auto′)
 
--- auto by default uses depth-first search
-auto = auto′ dfs
+  private
+    assembleError : List ErrorPart → List ErrorPart
+    assembleError = _++ strErr "\n--------------- ⇓ ⇓ ⇓ IGNORE ⇓ ⇓ ⇓ ---------------" ∷ []
 
-private
-  assembleError : List ErrorPart → List ErrorPart
-  assembleError = _++ strErr "\n--------------- ⇓ ⇓ ⇓ IGNORE ⇓ ⇓ ⇓ ---------------" ∷ []
+    searchSpaceExhaustedError : ∀ {A : Set} → TC A
+    searchSpaceExhaustedError = typeError (assembleError [ strErr "Error: Search space exhausted, solution not found." ])
 
-  unsupportedSyntaxError    : ∀ {A : Set} → TC A
-  unsupportedSyntaxError    = typeError (assembleError [ strErr "Error: Unsupported syntax." ])
+    Auto = TelView × ℕ → TC (String × Maybe Term)
 
-  searchSpaceExhaustedError : ∀ {A : Set} → TC A
-  searchSpaceExhaustedError = typeError (assembleError [ strErr "Error: Search space exhausted, solution not found." ])
+    debugAuto : Auto → Term × Ctx → TelView × ℕ → TC ⊤
+    debugAuto a (h , c) tv = caseM a tv of λ
+      { (d , just x ) → typeError (assembleError (strErr "Success Solution found. The trace generated is:" ∷
+                                                  strErr d ∷ []))
+      ; (d , nothing) → typeError (assembleError (strErr "Error: Solution not found. The trace generated is:" ∷
+                                                  strErr d ∷ []))}
 
-  Auto = TelView × ℕ → TC (String × Maybe Term)
-
-  showInfo : Auto → Term × Ctx → TelView × ℕ → TC ⊤
-  showInfo a (h , c) tv = caseM a tv of λ
-    { (d , just x ) → typeError (assembleError (strErr "Success Solution found. The trace generated is:" ∷
-                                                strErr d ∷ []))
-    ; (d , nothing) → typeError (assembleError (strErr "Error: Solution not found. The trace generated is:" ∷
-                                                strErr d ∷ []))}
-
-  printTerm : Auto → Term × Ctx → TelView × ℕ → TC ⊤
-  printTerm a (h , c)  tv = caseM a tv of λ
-    { (_ , nothing)  → searchSpaceExhaustedError
-    ; (_ , just t)   → typeError (assembleError (strErr "Success: The Term found by auto is:\n" ∷ termErr t ∷ []))}
-
-  applyTerm : Auto → Term × Ctx → TelView × ℕ → TC ⊤
-  applyTerm a (h , c) tv = caseM a tv of λ
-    { (_ , nothing)   → searchSpaceExhaustedError
-    ; (_ , just term) → inContext (reverse c) (unify h term)}
+    applyAuto : Auto → Term × Ctx → TelView × ℕ → TC ⊤
+    applyAuto a (h , c) tv = caseM a tv of λ
+      { (_ , nothing)   → searchSpaceExhaustedError
+      ; (_ , just term) → inContext (reverse c) (unify h term)}
 
 
-  run : Auto → (Auto → Term × Ctx → TelView × ℕ → TC ⊤) → Term → TC ⊤
-  run a r hole = do c  ← getContext
-                 -| caseM toTelView hole of λ
-                      { (tv , n , cc ) → inContext cc (r a (hole , c) (tv , n))}
+    run : ∀ {A : Set} → A → (A → Term × Ctx → TelView × ℕ → TC ⊤) → Term → TC ⊤
+    run a r hole = do c  ← getContext
+                  -| caseM toTelView hole of λ
+                        { (tv , n , cc ) → inContext cc (r a (hole , c) (tv , n))}
 
-macro
-  -- -- show debugging information.
-  info : Auto → (Term → TC ⊤)
-  info m = run m showInfo
+    DB = HintDB → TC String
 
-  -- print the resulting Term if any found.
-  print : Auto → (Term → TC ⊤)
-  print m = run m printTerm
+    printHintDB : HintDB → Term × Ctx → TelView × ℕ → TC ⊤
+    printHintDB db _ (tv , n)
+      with agda2goal×premises tv
+    ... | (g , args) = return (fromRules args ∙ db)
+                    >>= quoteTC
+                    >>= normalise
+                    >>= λ t → typeError (assembleError (strErr "Goal in context:" ∷ termErr g ∷ strErr "\nRules in context" ∷ termErr t ∷ [] ))
 
-  -- apply the Term found if any.
-  apply : Auto → (Term → TC ⊤)
-  apply m = run m applyTerm
+  auto = auto′ dfs
+
+  macro
+    -- -- show debugging information.
+    debug : Auto → (Term → TC ⊤)
+    debug m = run m debugAuto
+
+    -- apply the Term found if any.
+    apply : Auto → (Term → TC ⊤)
+    apply m = run m applyAuto
+
+    -- print the goal and HintDB.
+    print : HintDB → (Term → TC ⊤)
+    print db = run db printHintDB 

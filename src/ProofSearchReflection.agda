@@ -184,10 +184,11 @@ module ProofSearchReflection
         solveAcc (suc k , g ∷ gs , p) di db = node di (mapM-tc step (getHints db))
           where
             step : Hint → TC (SearchTree Proof DebugInfo)
-            step h = catchTC (instᵣ (getRule h)
-                              >>= λ ir → unify′ g (conclusion (proj₂ ir))
-                              >>= λ _   → norm-rule (proj₂ ir)
-                              >>= λ ir  → return (solveAcc (prf ir) (just (rname (getRule h)) )db))
+            step h = catchTC (normalise g
+                              >>= λ g′ → instᵣ (getRule h)
+                              >>= λ ir → unify′ g′ (conclusion (proj₂ ir))
+                              >>= λ _  → norm-rule (proj₂ ir)
+                              >>= λ ir → return (solveAcc (prf ir) (just (rname (getRule h)) )db))
                              (return (fail-leaf (just (rname (getRule h))) ))
               where
                 prf : Rule → Proof′

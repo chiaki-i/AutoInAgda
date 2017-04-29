@@ -3,8 +3,9 @@ open import Data.Nat       using (ℕ ; suc; zero; _+_; pred; compare)
 open import Function       using (_∘′_; case_of_)
 open import Data.Product   using (_×_; _,_; proj₁; proj₂)
 
+open import MinPrelude
+open import MinPrelude.Reflection
 open import Reflection
-open import Data.TC.Extra
 
 module Context where
 
@@ -16,7 +17,7 @@ module Context where
   private
     mkContext : Ctx → TC (List (Arg Type))
     mkContext c =
-      proj₂ <$-tc> foldlM-tc (λ {(i , xs) (arg info t) → do t ← inferType (var i []) >>= normalise
+      proj₂ <$> foldlM (λ {(i , xs) (arg info t) → do t ← inferType (var i []) >>= normalise
                                                         -| return ((suc i) , (arg info t ∷ xs))})
                   (0 , []) c
 

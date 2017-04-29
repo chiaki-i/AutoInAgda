@@ -2,13 +2,15 @@ open import Function                   using (_∘_; id; flip)
 open import Data.Nat     as Nat        using (ℕ; suc; zero; pred; _+_)
 open import Data.List    as List       using (List; []; _∷_; [_]; concatMap; _++_; length; map)
 open import Data.Maybe   as Maybe      using (Maybe; just; nothing; maybe)
-open import Data.Maybe.Extra           using (_<$-m>_)
 open import Data.Bool                  using (true; false)
+open import Data.Product               using (_×_; _,_; proj₁; proj₂)
+
 open import Reflection
-open import Data.TC.Extra              using (return; _>>=_) 
-open import Unification
+open import MinPrelude
+open import MinPrelude.Reflection
+
+open import Unification                using (myunify)
 open import Context
-open import Data.Product using (_×_; _,_; proj₁; proj₂)
 
 module Auto.Core where
 

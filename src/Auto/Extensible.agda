@@ -9,12 +9,10 @@ open import Data.String   using (String; _++_; toList; fromList; unlines)
 open import Data.Char     using (_==_)
 open import Data.Bool     using (Bool; true; false; not; if_then_else_)
 open import Data.Maybe    using (Maybe; just; nothing; maybe′)
-open import Reflection    using (data-type; strErr; Type; Term; Arg; Name; TC; quoteTC; getType; showName; typeError; termErr; getDefinition )
-                          renaming (unify to unifyTC)
 
-open import Data.Maybe.Extra
-open import Data.TC.Extra
-open import Data.List.Extra
+open import Reflection
+open import MinPrelude
+open import MinPrelude.Reflection
 
 module Auto.Extensible (instHintDB : IsHintDB) where
 
@@ -67,15 +65,15 @@ module Auto.Extensible (instHintDB : IsHintDB) where
     add-constr : Name → TC HintDB
     add-constr nm =
       caseM getDefinition nm of λ
-        { (data-type pars cs) → foldlM-tc add-hint ε cs
+        { (data-type pars cs) → foldlM add-hint ε cs
         ; _                   → typeError (strErr ("Non data-type name: " ++ showName nm) ∷ []) }
 
 
   macro
     _<<_ : HintDB → Name → Term → TC ⊤
-    db << nm = λ h → add-hint db nm >>= quoteTC >>= unifyTC h
+    db << nm = λ h → add-hint db nm >>= quoteTC >>= unify h
 
     constructors : Name → Term → TC ⊤
-    constructors nm = λ h → add-constr nm >>= quoteTC >>= unifyTC h
+    constructors nm = λ h → add-constr nm >>= quoteTC >>= unify h
 
   infixl 5 _<<_

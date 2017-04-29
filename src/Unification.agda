@@ -4,8 +4,8 @@ open import Relation.Nullary
 open import Data.Unit
 open import Data.List using (List; []; _∷_; zipWith)
 
-open import MinPrelude
-open import MinPrelude.Reflection
+open import Steroids
+open import Steroids.Reflection
 
 module Unification where
 

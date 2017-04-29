@@ -3,8 +3,8 @@ open import Data.Nat       using (ℕ ; suc; zero; _+_; pred; compare)
 open import Function       using (_∘′_; case_of_)
 open import Data.Product   using (_×_; _,_; proj₁; proj₂)
 
-open import MinPrelude
-open import MinPrelude.Reflection
+open import Steroids
+open import Steroids.Reflection
 open import Reflection
 
 module Context where

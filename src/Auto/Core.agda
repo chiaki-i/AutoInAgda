@@ -6,8 +6,8 @@ open import Data.Bool                  using (true; false)
 open import Data.Product               using (_×_; _,_; proj₁; proj₂)
 
 open import Reflection
-open import MinPrelude
-open import MinPrelude.Reflection
+open import Steroids
+open import Steroids.Reflection
 
 open import Unification                using (myunify)
 open import Context

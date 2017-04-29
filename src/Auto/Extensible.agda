@@ -1,9 +1,8 @@
 open import Auto.Core
-open import Function      using (_∘_; _$_)
+open import Function      using (_∘_; _$_; case_of_)
 open import Data.List     using (_∷_; []; [_]; List; length; takeWhile; reverse; map; foldr; intersperse)
 open import Data.Nat      using (ℕ; zero; suc; pred; _+_)
-open import Data.Nat.Show renaming (show to showNat)
-open import Data.Product  using (∃; _,_; _×_)
+open import Data.Product  using (∃; _,_; _×_; proj₁; proj₂)
 open import Data.Unit     using (⊤)
 open import Data.String   using (String; _++_; toList; fromList; unlines)
 open import Data.Char     using (_==_)
@@ -11,8 +10,8 @@ open import Data.Bool     using (Bool; true; false; not; if_then_else_)
 open import Data.Maybe    using (Maybe; just; nothing; maybe′)
 
 open import Reflection
-open import MinPrelude
-open import MinPrelude.Reflection
+open import Steroids
+open import Steroids.Reflection
 
 module Auto.Extensible (instHintDB : IsHintDB) where
 
@@ -24,25 +23,29 @@ module Auto.Extensible (instHintDB : IsHintDB) where
     open Debug
 
     -- show debuging information
-    showDebug : Debug (Maybe RuleName) → String
+    showDebug : Debug (Maybe RuleName × Maybe Term) → String
     showDebug d =
-      maybe′  (λ rn → foldr _++_ "" ((foldr _++_ "" ∘ intersperse "." ∘ map showNat ∘ reverse $ (index d))
-                                    ∷ " depth="  ∷ showNat (depth d)
+      maybe′  (λ rn → foldr _++_ "" ((foldr _++_ "" ∘ intersperse "." ∘ map show′ ∘ reverse $ (index d))
+                                    ∷ " depth="  ∷ show′ (depth d)
                                     ∷ " " ∷ showRuleName rn
-                                    ∷ " " ∷ [ if (fail? d) then "×" else "✓" ])) "" (info d)
+                                    ∷ " " ∷ [ if (fail? d) then "×" else "✓" ])) "" (proj₁ (info d))
+      ++ " "
+      ++
+      maybe′ (show′) "" (proj₂ (info d))
         where
           showRuleName : RuleName → String
           showRuleName (name x) = fromList ∘ reverse ∘ takeWhile (not ∘ (_== '.'))
                                           ∘ reverse ∘ toList $ showName x
-          showRuleName (var x ) = "var" ++ " " ++ showNat x
+          showRuleName (var x ) = "var" ++ " " ++ show′ x
 
   -- auto
   auto : Strategy → ℕ → HintDB → TelView × ℕ → TC (String × Maybe Term)
   auto search depth db (tv , n)
     with agda2goal×premises tv
-  ... | (g , args) = caseM search (suc depth) (solve g (fromRules args ∙ db)) of λ
-                      { ([] , d)    → return ((unlines ∘ map showDebug) d , nothing)
-                      ; (p ∷ _ , d) → reify n p >>= λ t → return ((unlines ∘ map showDebug) d , just t)}
+  ... | (g , args) = do st ← solve g (fromRules args ∙ db)
+                   -| case search (suc depth) st  of λ
+                         { ([] , d)    → return ((unlines ∘ map showDebug) d , nothing)
+                         ; (p ∷ _ , d) → reify n p >>= λ t → return ((unlines ∘ map showDebug) d , just t)}
 
 
   printDB : HintDB → TelView × ℕ → Term → TC (String × Maybe Term)

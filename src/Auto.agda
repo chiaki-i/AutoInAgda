@@ -8,8 +8,8 @@ open import Data.Maybe   using (Maybe; just; nothing)
 open import Data.String  using (String)
 
 open import Reflection
-open import MinPrelude
-open import MinPrelude.Reflection
+open import Steroids
+open import Steroids.Reflection
 
 module Auto where
 

@@ -143,10 +143,11 @@ module ProofSearchReflection
   Goal = Term
 
   -- search trees
+  {-# NO_POSITIVITY_CHECK #-}
   data SearchTree (A B : Set) : Set where
     succ-leaf : B → A → SearchTree A B
     fail-leaf : B → SearchTree A B
-    node      : B → List (SearchTree A B) → SearchTree A B
+    node      : B → List (TC (SearchTree A B)) → SearchTree A B
 
   data Proof : Set where
      con : (name : RuleName) (args : List Proof) → Proof
@@ -174,19 +175,19 @@ module ProofSearchReflection
     open IsHintDB isHintDB
 
     {-# TERMINATING #-}
-    solve : Term → HintDB → TC (SearchTree Proof DebugInfo)
+    solve : Term → HintDB → SearchTree Proof DebugInfo
     solve g db = solveAcc (1 , g ∷ [] , Vec.head) (nothing , nothing) db
       where
-        solveAcc : Proof′ → DebugInfo → HintDB → TC (SearchTree Proof DebugInfo)
-        solveAcc (0     ,     [] , p) di _  = return (succ-leaf di (p []))
-        solveAcc (suc k , g ∷ gs , p) di db = node di <$> (mapM step (getHints db))
+        solveAcc : Proof′ → DebugInfo → HintDB → SearchTree Proof DebugInfo
+        solveAcc (0     ,     [] , p) di _  = succ-leaf di (p [])
+        solveAcc (suc k , g ∷ gs , p) di db = node di (map step (getHints db))
           where
             step : Hint → TC (SearchTree Proof DebugInfo)
             step h = catchTC (do g′ ← normalise g
                               -| ir ← instᵣ (getRule h)
                               -| unify′ g′ (conclusion (proj₂ ir))
                               ~| ir′ ← norm-rule (proj₂ ir)
-                              -| solveAcc (prf ir′) (just (rname (getRule h)) , nothing ) db)
+                              -| return (solveAcc (prf ir′) (just (rname (getRule h)) , nothing ) db))
                              (return (fail-leaf (just (rname (getRule h)) , just g) ))
               where
                 prf : Rule → Proof′
@@ -197,7 +198,7 @@ module ProofSearchReflection
 
 
   ----------------------------------------------------------------------------
-  -- * define various search strategies                                   * --
+  --
   ----------------------------------------------------------------------------
 
   -- debug information collected by the proof search
@@ -210,17 +211,25 @@ module ProofSearchReflection
       info   : B
 
   Strategy : Set₁
-  Strategy = ∀ {A B : Set} → (depth : ℕ) → SearchTree A B -> List A × List (Debug B)
+  Strategy = ∀ {A B : Set} → (depth : ℕ) → SearchTree A B -> TC (Maybe A × List (Debug B))
 
-  dfs′ : ∀ {A B : Set} → (depth : ℕ) → (ℕ × List ℕ) → SearchTree A B -> List A × List (Debug B)
-  dfs′  zero   _  _                    = ([] , [])
-  dfs′ (suc k) (n , p) (fail-leaf l)   = ([]    , [ debug (suc n ∷ p) (suc k) true l  ])
-  dfs′ (suc k) (n , p) (succ-leaf l x) = ([ x ] , [ debug (suc n ∷ p) (suc k) false l ])
-  dfs′ (suc k) (n , p) (node l xs)
-    with foldr  (λ {x ( m , ( ys , zs )) →  let (y , z) = dfs′ k (m , suc n ∷ p) x
-                                            in  (suc m , (ys ∷ʳ y , zs ∷ʳ z))})
-                (0 , ([] , [])) xs
-  ... | _ , a , b = (concat a , (debug (suc n ∷ p) (suc k) false l) ∷ concat b)
+  second : ∀ {A B C : Set} → (B → C) → A × B → A × C
+  second f (fst , snd) = fst , f snd
+
+  {-# TERMINATING #-}
+  mutual
+    dfs′ : ∀ {A B : Set} → (depth : ℕ) → (ℕ × List ℕ) → SearchTree A B -> TC (Maybe A × List (Debug B))
+    dfs′  zero   _  _                    = return (nothing , [])
+    dfs′ (suc k) (n , p) (fail-leaf l)   = return (nothing , [ debug (suc n ∷ p) (suc k) true l  ])
+    dfs′ (suc k) (n , p) (succ-leaf l x) = return (just x  , [ debug (suc n ∷ p) (suc k) false l ])
+    dfs′ (suc k) (n , p) (node l xs)     = second (debug (suc n ∷ p) (suc k) false l ∷_) <$> dfs′′ 0 l xs k (n , p)
+
+    dfs′′ : ∀ {A B : Set} → ℕ → B → List (TC (SearchTree A B)) → ℕ → (ℕ × List ℕ) → TC (Maybe A × List (Debug B))
+    dfs′′ i l [] k (n , p)       = return (nothing ,  [])
+    dfs′′ i l (x ∷ xs) k (n , p) = x >>= λ x′ →  caseM dfs′ k (i , suc n ∷ p) x′ of λ
+                                                { (just x  , db)  → return (just x , db )
+                                                ; (nothing , db) →  second (db ++_) <$> dfs′′ (i + 1) l xs (suc k) (n , p)}
+
 
   dfs : Strategy
   dfs d s = dfs′ d (0 , []) s

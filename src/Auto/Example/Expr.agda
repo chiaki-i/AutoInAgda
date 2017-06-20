@@ -5,20 +5,18 @@ module Auto.Example.Expr where
 
 data Expr : Set where
   Const : ℕ → Expr
-  Var   : Expr
   Plus  : Expr → Expr → Expr
 
-data Eval (var : ℕ) : Expr → ℕ → Set where
-  EvalConst : ∀ {n} → Eval var (Const n) n
-  EvalVar   : Eval var Var var
-  EvalPlus  : ∀ {e₁ e₂ n₁ n₂} → Eval var e₁ n₁ → Eval var e₂ n₂ → Eval var (Plus e₁ e₂) (n₁ + n₂)
+data Eval : Expr → ℕ → Set where
+  EvalConst : ∀ {n} → Eval (Const n) n
+  EvalPlus  : ∀ {e₁ e₂ n₁ n₂} → Eval e₁ n₁ → Eval e₂ n₂ → Eval (Plus e₁ e₂) (n₁ + n₂)
 
 
 hintDB : HintDB
-hintDB = ε << EvalConst << EvalVar << EvalPlus
+hintDB = constructors Eval
 
-example₁ : ∀ {var} → Eval var (Plus Var (Plus (Const 8) Var)) (var + (8 + var))
-example₁ = {!!} -- debug (auto 10 hintDB)
+example₁ : Eval (Plus (Const 8) (Const 0)) 8
+example₁ = debug (auto 10 hintDB)
 
-example₁′  : ∀ {var} → Eval var (Plus Var (Plus (Const 8) Var)) (var + (8 + var))
-example₁′  = EvalPlus EvalVar {!!}
+example₂ : Eval (Plus (Const 8) (Const 0)) 8
+example₂ = EvalPlus {!!} {!!}

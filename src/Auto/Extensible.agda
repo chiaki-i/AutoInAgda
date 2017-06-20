@@ -42,10 +42,9 @@ module Auto.Extensible (instHintDB : IsHintDB) where
   auto : Strategy → ℕ → HintDB → TelView × ℕ → TC (String × Maybe Term)
   auto search depth db (tv , n)
     with agda2goal×premises tv
-  ... | (g , args) = do st ← solve g (fromRules args ∙ db)
-                   -| case search (suc depth) st  of λ
-                         { ([] , d)    → return ((unlines ∘ map showDebug) d , nothing)
-                         ; (p ∷ _ , d) → reify n p >>= λ t → return ((unlines ∘ map showDebug) d , just t)}
+  ... | (g , args) = caseM search (suc depth) (solve g (fromRules args ∙ db))  of λ
+                         { (nothing , d)    → return ((unlines ∘ map showDebug) d , nothing)
+                         ; (just p  , d) → reify n p >>= λ t → return ((unlines ∘ map showDebug) d , just t)}
 
 
   printDB : HintDB → TelView × ℕ → Term → TC (String × Maybe Term)

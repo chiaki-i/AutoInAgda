@@ -116,10 +116,6 @@ module ProofSearchReflection
                                                    (instₜ ms (conclusion r))
                                                    (filter visible? prems))}
 
-  norm-rule : Rule → TC Rule
-  norm-rule r = rule  (rname r) <$> normalise (conclusion r)
-                                <*> mapM (traverse normalise) (premises r)
-
   ----------------------------------------------------------------------------
   -- * define simple hint databases                                       * --
   ----------------------------------------------------------------------------
@@ -183,11 +179,10 @@ module ProofSearchReflection
         solveAcc (suc k , g ∷ gs , p) di db = node di (map step (getHints db))
           where
             step : Hint → TC (SearchTree Proof DebugInfo)
-            step h = catchTC (do g′ ← normalise g
-                              -| ir ← instᵣ (getRule h)
+            step h = catchTC (do g′  ← normalise g
+                              -| ir  ← instᵣ (getRule h)
                               -| unify′ g′ (conclusion (proj₂ ir))
-                              ~| ir′ ← norm-rule (proj₂ ir)
-                              -| return (solveAcc (prf ir′) (just (rname (getRule h)) , nothing ) db))
+                              ~| return (solveAcc (prf (proj₂ ir)) (just (rname (getRule h)) , nothing ) db))
                              (return (fail-leaf (just (rname (getRule h)) , just g) ))
               where
                 prf : Rule → Proof′

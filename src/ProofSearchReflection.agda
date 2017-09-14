@@ -225,6 +225,5 @@ module ProofSearchReflection
                                                 { (just x  , db)  → return (just x , db )
                                                 ; (nothing , db) →  second (db ++_) <$> dfs′′ (i + 1) l xs (suc k) (n , p)}
 
-
   dfs : Strategy
   dfs d s = dfs′ d (0 , []) s

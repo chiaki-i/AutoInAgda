@@ -65,4 +65,4 @@ module Auto where
 
     -- print the goal and HintDB.
     print : HintDB → (Term → TC ⊤)
-    print db = run db printHintDB 
+    print db = run db printHintDB

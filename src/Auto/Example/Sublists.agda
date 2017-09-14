@@ -34,11 +34,11 @@ hintdb₁ = ε << drop
             << trans
 
 test₁ : (1 ∷ []) ⊆ (1 ∷ 2 ∷ [])
-test₁ = info (auto 5 hintdb₁)
+test₁ = ? -- debug (auto 5 hintdb₁)
 
--- lemma₁ : {ws xs ys zs : List ℕ}
---        → ws ⊆ 1 ∷ xs → xs ⊆ ys → ys ⊆ zs → ws ⊆ 1 ∷ 2 ∷ zs
--- lemma₁ = info (auto 20 hintdb₁)
+lemma₁ : {ws xs ys zs : List ℕ}
+       → ws ⊆ 1 ∷ xs → xs ⊆ ys → ys ⊆ zs → ws ⊆ 1 ∷ 2 ∷ zs
+lemma₁ = debug (auto 20 hintdb₁)
 
 -- searchSpaceExhausted
 -- lemma₂ : {ws xs ys zs : List ℕ}

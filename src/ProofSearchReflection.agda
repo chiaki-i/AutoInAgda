@@ -29,7 +29,9 @@ module ProofSearchReflection
     ∃-syntax = ∃
     syntax ∃-syntax (λ x → B) = ∃[ x ] B
 
-  -- introduce rules
+  -- rules are composed of a list of premises and a conclusion
+  -- each premise is marked with its visibility so the rule can
+  -- be properly instantiated.
   record Rule : Set where
     constructor rule
     field
@@ -52,7 +54,6 @@ module ProofSearchReflection
   -- argument
   arity : (r : Rule) → ℕ
   arity = length ∘ premises
-
 
   ----------------------------------------------------------------------------
   -- * define hint databases                                              * --
@@ -85,6 +86,7 @@ module ProofSearchReflection
   unArg (arg i x) = x
 
   -- instantiate a Term with a given list of terms
+  -- (all the terms in the list should be metavariables)
   -- filling the variables.
   {-# TERMINATING #-}
   instₜ : List (Maybe Term) → Term → Term
@@ -95,26 +97,28 @@ module ProofSearchReflection
   instₜ m (con c args) = con c (map (fmap (instₜ m)) args )
   instₜ m (def f args) = def f (map (fmap (instₜ m)) args )
   instₜ m (lam v (abs s x)) = lam v (abs s (instₜ m x))
-  -- this case has to be worked out
-  instₜ m (pat-lam cs args) = pat-lam cs args
   instₜ m (pi a (abs s x))  = pi (fmap (instₜ m) a) (abs s (instₜ m x))
   instₜ m (sort s)          = sort s
   instₜ m (lit l)           = lit l
   instₜ m (meta x args)     = meta x ((map (fmap (instₜ m)) args ))
   instₜ m unknown           = unknown
+  -- this case hasn't been studied
+  instₜ m (pat-lam cs args) = pat-lam cs args
 
 
-  aux : List (Maybe Term) × List (Arg Term) → Arg Term → TC (List (Maybe Term) × List (Arg Term))
-  aux (m , ips) arg′ with fmap (instₜ m) arg′
-  ... | iarg@(arg (arg-info visible r) x) = return ((nothing ∷ m) , ips ∷ʳ iarg)
-  ... | iarg@(arg (arg-info _       r) x) = newMeta x >>= (λ t → return ((just t ∷ m) , ips ∷ʳ iarg))
-
-
+  -- instantiate a Rule returning the Rule with all the locally
+  -- bound variables replaced by fresh metavariables.
+  -- it also returns the list of this metavariables for debugging purposes
   instᵣ : Rule → TC (List (Maybe Term) × Rule)
   instᵣ r = foldlM aux ([] , []) (premises r)
               >>= λ { (ms , prems) → return ( ms , rule (rname r)
-                                                   (instₜ ms (conclusion r))
-                                                   (filter visible? prems))}
+                                                        (instₜ ms (conclusion r))
+                                                        (filter visible? prems))}
+     where
+        aux : List (Maybe Term) × List (Arg Term) → Arg Term → TC (List (Maybe Term) × List (Arg Term))
+        aux (m , ips) arg′ with fmap (instₜ m) arg′
+        ... | iarg@(arg (arg-info visible r) x) = return ((nothing ∷ m) , ips ∷ʳ iarg)
+        ... | iarg@(arg (arg-info _       r) x) = newMeta x >>= (λ t → return ((just t ∷ m) , ips ∷ʳ iarg))
 
   ----------------------------------------------------------------------------
   -- * define simple hint databases                                       * --
@@ -132,13 +136,15 @@ module ProofSearchReflection
       ; ret      = [_]
       }
 
-  -----------------
+  -- -------------------------------------------------------------------------
   -- * define search trees, proofs and partial proofs                     * --
   ----------------------------------------------------------------------------
 
   Goal = Term
 
-  -- search trees
+  -- search tree
+  -- NO_POSITIVITY_CHECK is required due to the use of the TC monad in the node
+  -- constructor.
   {-# NO_POSITIVITY_CHECK #-}
   data SearchTree (A B : Set) : Set where
     succ-leaf : B → A → SearchTree A B
@@ -192,11 +198,15 @@ module ProofSearchReflection
                            Vec.++ gs
 
 
-  ----------------------------------------------------------------------------
-  --
-  ----------------------------------------------------------------------------
+  -- ----------------------------------------------------------------------------
+  -- -- * proof search
+  -- ----------------------------------------------------------------------------
 
   -- debug information collected by the proof search
+  -- + the index indicates the location as branch in the proof tree
+  -- + the depth of the node
+  -- + the fail? whether is a failed node or not (depth has been reached)
+  -- + the debugging information itself
   record Debug (B : Set) : Set where
     constructor debug
     field
@@ -205,25 +215,32 @@ module ProofSearchReflection
       fail?  : Bool
       info   : B
 
+  -- strategy now takes into account not only the result but also the debugging information.
+  -- such information holds the trace of the search through the proof tree.
   Strategy : Set₁
   Strategy = ∀ {A B : Set} → (depth : ℕ) → SearchTree A B -> TC (Maybe A × List (Debug B))
 
-  second : ∀ {A B C : Set} → (B → C) → A × B → A × C
-  second f (fst , snd) = fst , f snd
+  private
+    -- utility function
+    mapSecond : ∀ {A B C : Set} → (B → C) → A × B → A × C
+    mapSecond f (fst , snd) = fst , f snd
 
+  -- workhorse function for depth-first search
+  -- due to the use of TC monad bind (>>=) we need to use the TERMINATING flag.
   {-# TERMINATING #-}
   mutual
     dfs′ : ∀ {A B : Set} → (depth : ℕ) → (ℕ × List ℕ) → SearchTree A B -> TC (Maybe A × List (Debug B))
     dfs′  zero   _  _                    = return (nothing , [])
     dfs′ (suc k) (n , p) (fail-leaf l)   = return (nothing , [ debug (suc n ∷ p) (suc k) true l  ])
     dfs′ (suc k) (n , p) (succ-leaf l x) = return (just x  , [ debug (suc n ∷ p) (suc k) false l ])
-    dfs′ (suc k) (n , p) (node l xs)     = second (debug (suc n ∷ p) (suc k) false l ∷_) <$> dfs′′ 0 l xs k (n , p)
+    dfs′ (suc k) (n , p) (node l xs)     = mapSecond (debug (suc n ∷ p) (suc k) false l ∷_) <$> dfs′′ 0 l xs k (n , p)
 
     dfs′′ : ∀ {A B : Set} → ℕ → B → List (TC (SearchTree A B)) → ℕ → (ℕ × List ℕ) → TC (Maybe A × List (Debug B))
     dfs′′ i l [] k (n , p)       = return (nothing ,  [])
     dfs′′ i l (x ∷ xs) k (n , p) = x >>= λ x′ →  caseM dfs′ k (i , suc n ∷ p) x′ of λ
-                                                { (just x  , db)  → return (just x , db )
-                                                ; (nothing , db) →  second (db ++_) <$> dfs′′ (i + 1) l xs (suc k) (n , p)}
+                                                { (just x  , db) → return (just x , db )
+                                                ; (nothing , db) →  mapSecond (db ++_) <$> dfs′′ (i + 1) l xs (suc k) (n , p)}
 
+  -- depth-first search strategy
   dfs : Strategy
   dfs d s = dfs′ d (0 , []) s

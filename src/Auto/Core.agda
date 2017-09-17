@@ -5,11 +5,11 @@ open import Data.Maybe   as Maybe      using (Maybe; just; nothing; maybe)
 open import Data.Bool                  using (true; false)
 open import Data.Product               using (_×_; _,_; proj₁; proj₂)
 
-open import Reflection
+open import Reflection                 renaming (unify to unifyTC)
 open import Steroids
 open import Steroids.Reflection
 
-open import Unification                using (myunify)
+open import Unification                using (unify)
 open import Context
 
 module Auto.Core where
@@ -23,7 +23,7 @@ module Auto.Core where
     var   : ℕ    → RuleName
 
   -- -- now we can load the definitions from proof search
-  open import ProofSearchReflection RuleName myunify
+  open import ProofSearchReflection RuleName unify
     as PS public renaming (module Extensible to PsExtensible)
 
   -- convert an Agda name to a rule-term.

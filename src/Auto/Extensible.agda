@@ -47,6 +47,7 @@ module Auto.Extensible (instHintDB : IsHintDB) where
                          ; (just p  , d) → reify n p >>= λ t → return ((unlines ∘ map showDebug) d , just t)}
 
 
+  -- print the hint database
   printDB : HintDB → TelView × ℕ → Term → TC (String × Maybe Term)
   printDB db (tv , n) h
     with agda2goal×premises tv

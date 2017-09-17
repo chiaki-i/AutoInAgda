@@ -199,7 +199,7 @@ module ProofSearchReflection
 
 
   -- ----------------------------------------------------------------------------
-  -- -- * proof search
+  -- -- * Some search strategies
   -- ----------------------------------------------------------------------------
 
   -- debug information collected by the proof search

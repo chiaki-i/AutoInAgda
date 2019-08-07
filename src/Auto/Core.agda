@@ -1,7 +1,8 @@
 open import Level                      using (Level)
 open import Function                   using (_∘_; id; flip)
 open import Data.Fin     as Fin        using (fromℕ)
-open import Data.Nat     as Nat        using (ℕ; suc; zero; pred; _+_; _⊔_; decTotalOrder)
+open import Data.Nat     as Nat        using (ℕ; suc; zero; pred; _+_; _⊔_)
+open import Data.Nat.Properties        using (≤-decTotalOrder)
 open import Data.List    as List       using (List; []; _∷_; [_]; concatMap; _++_; length; map)
 open import Data.Vec     as Vec        using (Vec; []; _∷_; _∷ʳ_; reverse; initLast; toList)
 open import Data.Product as Prod       using (∃; _×_; _,_; proj₁; proj₂)
@@ -17,7 +18,7 @@ open import Reflection renaming (Term to AgTerm; _≟_ to _≟-AgTerm_; bindTC t
 
 module Auto.Core where
 
-  open DecTotalOrder Nat.decTotalOrder using (total)
+  open DecTotalOrder ≤-decTotalOrder using (total)
 
   private
     ∃-syntax : ∀ {a b} {A : Set a} → (A → Set b) → Set (b Level.⊔ a)
@@ -233,7 +234,7 @@ module Auto.Core where
         reifyDef (function cs)       = reifyChildren ps >>= (return ∘ def n)
         reifyDef (constructor′ d)    = reifyChildren ps >>= (return ∘ con n) 
         reifyDef (data-type pars cs) = return unknown
-        reifyDef (record′ c)         = return unknown
+        reifyDef (record′ c _)       = return unknown
         reifyDef axiom               = return unknown
         reifyDef primitive′          = return unknown
 

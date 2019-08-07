@@ -5,6 +5,7 @@ open import Data.Fin.Properties                   renaming (_≟_ to _≟-Fin_)
 open import Data.List    as List                  using (List; _∷_; [])
 open import Data.List.Properties                  renaming (∷-injective to ∷-inj)
 open import Data.Maybe   as Maybe                 using (Maybe; just; nothing)
+open import Data.Maybe.Categorical                using (monad)
 open import Data.Nat                              using (ℕ; suc; zero)
 open import Data.Product as Prod                  using (∃; _×_; _,_; proj₁; proj₂)
 open import Relation.Nullary                      using (Dec; yes; no)
@@ -19,7 +20,7 @@ module Unification
 
   private
     instance
-      MaybeMonad = Maybe.monad
+      MaybeMonad = monad
 
   data Term (n : ℕ) : Set where
     var : (x : Fin n) → Term n

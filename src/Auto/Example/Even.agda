@@ -1,4 +1,5 @@
 open import Auto
+open import Auto.Debug
 open import Algebra
 open import Data.List using (_∷_; [];_++_;List)
 open import Data.Nat using (ℕ; suc; zero; _+_)

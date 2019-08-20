@@ -6,7 +6,7 @@ open import Data.Product using (_,_)
 open import Data.Sum     using (inj₁; inj₂)
 open import Data.Unit    using (⊤)
 open import Reflection   using (Name; Type; Arg; Term; TC;
-                                inferType; getContext; getDefinition; getType;
+                                inferType; getContext; getDefinition; getType; normalise;
                                 quoteTC;
                                 typeError; strErr; termErr;
                                 unify)
@@ -23,8 +23,9 @@ auto-showStrategy search depth db type ctx
 ... | inj₂ ctxs
   with agda2goal×premises (length ctxs) type
 ... | inj₁ msg  = return (quoteError msg)
-... | inj₂ ((n , g) , args) =
-  quoteTC (search (suc depth) (solve g (fromRules ctxs ∙ (fromRules args ∙ db))))
+... | inj₂ ((n , g) , args)
+  with (search (suc depth) (solve g (fromRules ctxs ∙ (fromRules args ∙ db))))
+... | term = quoteTC term >>= normalise
 
 auto-showSolve : Strategy → ℕ → HintDB → Type → List (Arg Type) → TC Term
 auto-showSolve search depth db type ctx
@@ -33,8 +34,9 @@ auto-showSolve search depth db type ctx
 ... | inj₂ ctxs
   with agda2goal×premises (length ctxs) type
 ... | inj₁ msg  = return (quoteError msg)
-... | inj₂ ((n , g) , args) =
-  quoteTC (solve g (fromRules ctxs ∙ (fromRules args ∙ db)))
+... | inj₂ ((n , g) , args)
+  with (solve g (fromRules ctxs ∙ (fromRules args ∙ db)))
+... | term = quoteTC term >>= normalise
 
 debugMessage : Term → TC Term
 debugMessage term = typeError ((strErr "!Debug Mode! \n") ∷ (termErr term) ∷ [])
